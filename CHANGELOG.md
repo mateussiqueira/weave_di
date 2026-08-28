@@ -7,6 +7,39 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [3.1.0] - 2026-08-28
+
+### Adicionado
+
+- **`WeaveModule.exports`** — o que faltava para `WeaveModule` ser utilizável
+  num app com vários módulos.
+
+  O container de um módulo é um **escopo**, e escopo resolve para cima, nunca
+  de lado: sem export, o `HttpClient` registrado pelo módulo de autenticação
+  era invisível para o de pagamentos. `imports` não resolvia isso — ele
+  controla ordem de instalação, não visibilidade. Na prática, isso tornava
+  impossível migrar um app real para `WeaveModule`, e era por isso que o app
+  de referência tinha 16 classes estáticas escritas à mão.
+
+  ```dart
+  WeaveModule(
+    name: 'auth',
+    binds: [(c) => c.bindSingleton<HttpClient>(() => DioAdapter())],
+    exports: [const WeaveExport<HttpClient>()],
+  )
+  ```
+
+  O encaminhamento é **transient de propósito**: ele delega a
+  `origem.get<T>()`, então o lifetime declarado no módulo é preservado — um
+  singleton continua entregando a mesma instância dos dois lados, e um
+  transient continua criando uma por chamada. Encaminhar como singleton
+  cacheria no pai um tipo que o módulo declarou transient.
+
+  `WeaveExport` aceita `name`, para binding nomeado. Descartar o módulo
+  retira o encaminhamento do pai — deixá-lo apontaria para um escopo morto.
+
+---
+
 ## [3.0.1] - 2026-08-28
 
 Correções encontradas por auditoria adversarial sobre a própria 3.0.0. Duas

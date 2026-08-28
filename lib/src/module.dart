@@ -1,5 +1,6 @@
 import 'container.dart';
 import 'container_adapter.dart';
+import 'export.dart';
 import 'route.dart';
 
 /// Função para registrar dependências em um container.
@@ -38,6 +39,7 @@ class WeaveModule {
     this.binds = const <WeaveBind>[],
     this.routes = const <WeaveRoute>[],
     this.imports = const <WeaveModule>[],
+    this.exports = const <WeaveExport<Object?>>[],
     WeaveContainer? parent,
     // Parâmetro nomeado não pode começar com `_`.
     // ignore: prefer_initializing_formals
@@ -52,8 +54,14 @@ class WeaveModule {
   /// Rotas deste módulo.
   final List<WeaveRoute> routes;
 
-  /// Sub-módulos importados.
+  /// Sub-módulos importados. Controla ordem de instalação.
   final List<WeaveModule> imports;
+
+  /// O que este módulo publica para o resto da aplicação.
+  ///
+  /// Sem isto, um bind do módulo só existe dentro do escopo dele. Ver
+  /// [WeaveExport].
+  final List<WeaveExport<Object?>> exports;
 
   final WeaveContainer? _parent;
 
@@ -157,6 +165,10 @@ class WeaveModule {
     for (final WeaveBind bind in binds) {
       bind(container);
     }
+    final WeaveContainer target = _parent ?? WeaveContainerAdapter.global;
+    for (final WeaveExport<Object?> export in exports) {
+      export.forwardTo(target, container);
+    }
     return true;
   }
 
@@ -188,6 +200,11 @@ class WeaveModule {
     }
     final WeaveContainer effectiveParent =
         _parent ?? WeaveContainerAdapter.global;
+    // Retira os encaminhamentos antes de matar o escopo: deixá-los apontaria
+    // o pai para um container morto.
+    for (final WeaveExport<Object?> export in exports) {
+      export.revokeFrom(effectiveParent);
+    }
     effectiveParent.disposeScope(current);
     _container = null;
     _installed = false;

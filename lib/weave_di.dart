@@ -17,6 +17,7 @@ export 'src/errors.dart'
         WeaveCircularDependencyError,
         WeaveMissingTypeArgumentError,
         describeWeaveKey;
+export 'src/export.dart' show WeaveExport;
 export 'src/logger.dart' show WeaveLog, WeaveLogger;
 export 'src/module.dart' show WeaveModule, WeaveBind, WeaveModuleRegistry;
 export 'src/route.dart'
