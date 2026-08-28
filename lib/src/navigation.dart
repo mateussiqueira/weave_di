@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'container_adapter.dart';
+import 'gate.dart';
 import 'route.dart';
 import 'router.dart';
 
@@ -10,111 +10,80 @@ import 'router.dart';
 /// Não tem estado global — tudo explícito.
 extension WeaveNavigation on BuildContext {
   /// Navega para uma rota registrada no router.
-  void pushRoute(WeaveRouter router, String path, {Object? arguments}) async {
-    final routeMatch = router.match(path);
-    if (routeMatch == null) return;
-
-    final route = routeMatch.route;
-
-    // Verifica redirect
-    if (route.redirect != null) {
-      final redirectPath = route.redirect!(
-        this,
-        WeaveParams(routeMatch.params),
-      );
-      if (redirectPath != null) {
-        return pushRoute(router, redirectPath, arguments: arguments);
-      }
-    }
-
-    // Verifica guards e middlewares
-    final allowed = await router.canActivateRoute(this, path, routeMatch);
-    if (!allowed) return;
-    if (!mounted) return;
-
-    Widget buildPage(BuildContext context) {
-      final weaveParams = WeaveParams(routeMatch.params);
-      if (route.injectFactory != null) {
-        return route.injectFactory!(
-          context,
-          weaveParams,
-          WeaveContainerAdapter.global,
-        );
-      }
-      return route.builder(context, weaveParams);
-    }
-
-    if (route.transition.type != WeaveTransitionType.material) {
-      Navigator.of(this).push(
-        route.transition.buildRoute(
-          Builder(builder: (context) => buildPage(context)),
-        ),
-      );
-      return;
-    }
-
-    Navigator.of(this).push(
-      MaterialPageRoute(
-        settings: RouteSettings(name: path, arguments: arguments),
-        builder: (context) => buildPage(context),
-      ),
-    );
-  }
-
-  /// Substitui a rota atual por uma nova.
-  void replaceRoute(
+  ///
+  /// O `Future` completa quando a rota é removida da pilha, com o valor do
+  /// `pop`. Completa com `null` imediatamente se a rota não existir ou se um
+  /// guard bloquear.
+  Future<T?> pushRoute<T>(
     WeaveRouter router,
     String path, {
     Object? arguments,
   }) async {
-    final routeMatch = router.match(path);
-    if (routeMatch == null) return;
+    final _Resolved<T>? resolved =
+        await _resolve<T>(router, path, arguments, const <String>[]);
+    if (resolved == null) return null;
+    return Navigator.of(this).push<T>(resolved.route);
+  }
 
-    final route = routeMatch.route;
-    final allowed = await router.canActivateRoute(this, path, routeMatch);
-    if (!allowed) return;
-    if (!mounted) return;
+  /// Substitui a rota atual por uma nova.
+  Future<T?> replaceRoute<T>(
+    WeaveRouter router,
+    String path, {
+    Object? arguments,
+  }) async {
+    final _Resolved<T>? resolved =
+        await _resolve<T>(router, path, arguments, const <String>[]);
+    if (resolved == null) return null;
+    return Navigator.of(this).pushReplacement<T, dynamic>(resolved.route);
+  }
 
-    Widget buildPage(BuildContext context) {
-      final weaveParams = WeaveParams(routeMatch.params);
-      if (route.injectFactory != null) {
-        return route.injectFactory!(
-          context,
-          weaveParams,
-          WeaveContainerAdapter.global,
-        );
-      }
-      return route.builder(context, weaveParams);
-    }
-
-    if (route.transition.type != WeaveTransitionType.material) {
-      Navigator.of(this).pushReplacement(
-        route.transition.buildRoute(
-          Builder(builder: (context) => buildPage(context)),
-        ),
-      );
-      return;
-    }
-
-    Navigator.of(this).pushReplacement(
-      MaterialPageRoute(
-        settings: RouteSettings(name: path, arguments: arguments),
-        builder: (context) => buildPage(context),
-      ),
+  /// Limpa a pilha e navega para uma nova rota.
+  Future<T?> clearStackAndPush<T>(
+    WeaveRouter router,
+    String path, {
+    Object? arguments,
+  }) async {
+    final _Resolved<T>? resolved =
+        await _resolve<T>(router, path, arguments, const <String>[]);
+    if (resolved == null) return null;
+    return Navigator.of(this).pushAndRemoveUntil<T>(
+      resolved.route,
+      (Route<dynamic> _) => false,
     );
   }
 
   /// Navega via nome da rota.
-  void pushNamedRoute(
+  ///
+  /// [params] materializa os `:segmentos` do path. Sem isso, uma rota
+  /// `/user/:id` navegada por nome empurrava o path literal, com `:id` no
+  /// lugar do valor.
+  Future<T?> pushNamedRoute<T>(
     WeaveRouter router,
     String name, {
     Object? arguments,
+    Map<String, String> params = const <String, String>{},
   }) {
-    final route = router.routes.firstWhere(
-      (r) => r.name == name,
-      orElse: () => throw StateError('No route named $name found'),
+    final WeaveRoute route = _byName(router, name);
+    return pushRoute<T>(
+      router,
+      _materialize(route.path, params),
+      arguments: arguments,
     );
-    pushRoute(router, route.path, arguments: arguments);
+  }
+
+  /// Substitui a rota atual usando o nome da rota de destino.
+  Future<T?> pushReplacementNamed<T>(
+    WeaveRouter router,
+    String name, {
+    Object? arguments,
+    Map<String, String> params = const <String, String>{},
+  }) {
+    final WeaveRoute route = _byName(router, name);
+    return replaceRoute<T>(
+      router,
+      _materialize(route.path, params),
+      arguments: arguments,
+    );
   }
 
   /// Volta para a tela anterior.
@@ -129,74 +98,117 @@ extension WeaveNavigation on BuildContext {
 
   /// Volta até a primeira rota.
   void popUntilRoot() {
-    Navigator.of(this).popUntil((route) => route.isFirst);
+    Navigator.of(this).popUntil((Route<dynamic> route) => route.isFirst);
   }
 
-  /// Substitui rota por nome.
-  void pushReplacementNamed(
-    WeaveRouter router,
-    String name, {
-    Object? arguments,
-  }) {
-    final route = router.routes.firstWhere(
-      (r) => r.name == name,
-      orElse: () => throw StateError('No route named $name found'),
-    );
-    replaceRoute(router, route.path, arguments: arguments);
+  WeaveRoute _byName(WeaveRouter router, String name) {
+    final WeaveRoute? route = router.routeByName(name);
+    if (route == null) throw StateError('No route named $name found');
+    return route;
   }
 
-  /// Limpa stack e navega para uma nova rota.
-  void clearStackAndPush(
+  /// Roda redirect + guards e devolve a rota pronta, ou `null` se bloqueado.
+  Future<_Resolved<T>?> _resolve<T>(
     WeaveRouter router,
-    String path, {
+    String path,
     Object? arguments,
-  }) async {
-    final routeMatch = router.match(path);
-    if (routeMatch == null) return;
+    List<String> chain,
+  ) async {
+    final WeaveRouteMatch? routeMatch = router.match(path);
+    if (routeMatch == null) return null;
 
-    final route = routeMatch.route;
-    final allowed = await router.canActivateRoute(this, path, routeMatch);
-    if (!allowed) return;
-    if (!mounted) return;
+    final WeaveRoute route = routeMatch.route;
+    final WeaveParams params = WeaveParams.of(routeMatch.params);
 
-    Widget buildPage(BuildContext context) {
-      final weaveParams = WeaveParams(routeMatch.params);
-      if (route.injectFactory != null) {
-        return route.injectFactory!(
-          context,
-          weaveParams,
-          WeaveContainerAdapter.global,
+    // `redirect` declarativo — agora nos três métodos, não só no push.
+    if (route.redirect != null) {
+      if (chain.length >= router.maxRedirects) {
+        router.log('Redirect loop abortado (teto): ${chain.join(' -> ')}');
+        return null;
+      }
+      final String? target = route.redirect!(this, params);
+      if (target != null && !chain.contains(target)) {
+        if (!mounted) return null;
+        return _resolve<T>(
+          router,
+          target,
+          arguments,
+          <String>[...chain, path],
         );
       }
-      return route.builder(context, weaveParams);
+      if (target != null) {
+        router.log(
+          'Redirect loop abortado: ${<String>[...chain, target].join(' -> ')}',
+        );
+        return null;
+      }
     }
+
+    if (!mounted) return null;
+    final bool allowed = await router.canActivateRoute(this, path, routeMatch);
+    if (!allowed || !mounted) return null;
+
+    Widget buildPage(BuildContext context) =>
+        router.buildPage(context, route, params);
+
+    final RouteSettings settings = RouteSettings(
+      name: path,
+      arguments: WeaveGateArguments.unwrap(arguments),
+    );
 
     if (route.transition.type != WeaveTransitionType.material) {
-      Navigator.of(this).pushAndRemoveUntil(
-        route.transition.buildRoute(
-          Builder(builder: (context) => buildPage(context)),
+      return _Resolved<T>(
+        route.transition.buildRoute<T>(
+          Builder(builder: buildPage),
+          settings: settings,
         ),
-        (route) => false,
       );
-      return;
     }
 
-    Navigator.of(this).pushAndRemoveUntil(
-      MaterialPageRoute(
-        settings: RouteSettings(name: path, arguments: arguments),
-        builder: (context) => buildPage(context),
-      ),
-      (route) => false,
+    return _Resolved<T>(
+      MaterialPageRoute<T>(settings: settings, builder: buildPage),
     );
   }
+
+  static String _materialize(String path, Map<String, String> params) {
+    if (!path.contains(':')) return path;
+
+    final String result = path
+        .split('/')
+        .map((String part) {
+          if (!part.startsWith(':')) return part;
+          final String key = part.substring(1);
+          final String? value = params[key];
+          if (value == null) return part;
+          return Uri.encodeComponent(value);
+        })
+        .join('/');
+
+    if (result.contains(':')) {
+      throw ArgumentError.value(
+        params,
+        'params',
+        'Faltam parâmetros para o path "$path" (resultou em "$result")',
+      );
+    }
+    return result;
+  }
+}
+
+class _Resolved<T> {
+  const _Resolved(this.route);
+  final Route<T> route;
 }
 
 /// Extensão para navegação global via router.
 extension WeaveGlobalNavigation on WeaveRouter {
   /// Navega globalmente via router.
-  void push(BuildContext context, String path, {Object? arguments}) {
-    (context as Element).pushRoute(this, path, arguments: arguments);
-  }
+  Future<T?> push<T>(
+    BuildContext context,
+    String path, {
+    Object? arguments,
+  }) =>
+      context.pushRoute<T>(this, path, arguments: arguments);
 }
 
 /// Extensões para dialogs e modals.

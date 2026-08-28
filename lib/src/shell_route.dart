@@ -21,11 +21,19 @@ import 'route.dart';
 ///   ],
 /// )
 /// ```
+@Deprecated(
+  'O WeaveRouter não consome WeaveShellRoute: nada em router.dart a '
+  'referencia. Componha o shell dentro do builder da página. '
+  'Ver CHANGELOG 2.1.0.',
+)
 class WeaveShellRoute {
   final String path;
   final String? name;
   final Widget Function(BuildContext context, Widget child) shellBuilder;
   final List<WeaveRoute> routes;
+
+  /// Nunca lido: o router não consome shell routes.
+  @Deprecated('Não tem efeito. Ver CHANGELOG 2.1.0.')
   final List<WeaveGuard> guards;
 
   const WeaveShellRoute({

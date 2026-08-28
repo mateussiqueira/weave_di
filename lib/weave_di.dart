@@ -8,6 +8,7 @@ export 'src/container.dart'
         WeaveAsyncFactory;
 export 'src/container_adapter.dart' show WeaveContainerAdapter;
 export 'src/binding.dart' show WeaveBinding;
+export 'src/logger.dart' show WeaveLog, WeaveLogger;
 export 'src/module.dart' show WeaveModule, WeaveBind, WeaveModuleRegistry;
 export 'src/route.dart'
     show
@@ -16,7 +17,15 @@ export 'src/route.dart'
         WeaveTransition,
         WeaveTransitionType,
         WeaveParams;
-export 'src/guard.dart' show WeaveGuard, WeaveRouteGuard;
+export 'src/guard.dart'
+    show
+        WeaveGuard,
+        WeaveRouteGuard,
+        WeaveRedirectingGuard,
+        WeaveGuardResult,
+        WeaveGuardAllow,
+        WeaveGuardBlock,
+        WeaveGuardRedirect;
 export 'src/middleware.dart' show WeaveMiddleware;
 export 'src/router.dart' show WeaveRouter;
 export 'src/navigation.dart'

@@ -5,6 +5,11 @@ import 'container_adapter.dart';
 ///
 /// Agrupa um ou mais registros que podem ser aplicados a um container.
 /// Útil pra organizar binds por feature ou módulo.
+@Deprecated(
+  'Use WeaveModule, que tem container próprio, lifecycle, ordem topológica '
+  'e install idempotente. WeaveBinding não é consumido por nenhuma outra '
+  'parte do package. Será removido na 3.0.0.',
+)
 class WeaveBinding {
   /// Nome para debugging.
   final String name;

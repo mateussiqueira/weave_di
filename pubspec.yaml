@@ -3,7 +3,7 @@ description: >-
   DI + rotas pra Flutter. Simples, tipado, sem boilerplate.
   Container de injeção com scopes, factories com parâmetros, e
   um sistema de rotas com guards, middleware e transições.
-version: 2.0.0
+version: 2.1.0
 repository: https://github.com/digital-core/weave
 homepage: https://github.com/digital-core/weave
 issue_tracker: https://github.com/digital-core/weave/issues

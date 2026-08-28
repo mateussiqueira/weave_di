@@ -58,10 +58,11 @@ class _LogMiddleware implements WeaveMiddleware {
   _LogMiddleware({void Function(String message)? logger})
       : _log = logger ?? _defaultLog;
 
-  static void _defaultLog(String message) {
-    // ignore: avoid_print
-    print('[Weave] $message');
-  }
+  // Continua barulhento por padrão de propósito: quem constrói um
+  // `WeaveMiddleware.log()` está pedindo log explicitamente. O silêncio
+  // padrão do `WeaveLog` vale para o diagnóstico interno, não para isto —
+  // silenciar aqui transformaria a feature num no-op.
+  static void _defaultLog(String message) => debugPrint('[Weave] $message');
 
   @override
   Future<bool> onNavigate(

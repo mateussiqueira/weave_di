@@ -11,26 +11,38 @@ typedef WeaveBind<T extends Object> = void Function(WeaveContainer container);
 /// usado direto ou estendido com lifecycle.
 ///
 /// ```dart
-/// // Uso direto
 /// final authModule = WeaveModule(
 ///   name: 'auth',
 ///   binds: [(c) => c.bindSingleton<AuthService>(() => AuthServiceImpl())],
 ///   routes: [WeaveRoute(path: '/login', builder: ...)],
 /// );
 /// authModule.install();
+/// ```
 ///
-/// // Com lifecycle
-/// class AuthModule extends WeaveModule {
-///   AuthModule() : super(name: 'auth', binds: [...], routes: [...]);
+/// O container do módulo é um **escopo do [parent]** (por padrão o global):
+/// o que não estiver registrado localmente é resolvido subindo. Até a 2.0.0
+/// era um container solto, sem pai, e portanto invisível para todo o resto.
 ///
-///   @override
-///   Future<void> onInit() async { /* async setup */ }
+/// Para que as rotas do módulo resolvam a partir dele, passe o container ao
+/// router:
 ///
-///   @override
-///   Future<void> onDispose() async { /* cleanup */ }
-/// }
+/// ```dart
+/// final router = WeaveRouter(
+///   routes: module.allRoutes,
+///   container: module.container,
+/// );
 /// ```
 class WeaveModule {
+  WeaveModule({
+    required this.name,
+    this.binds = const <WeaveBind>[],
+    this.routes = const <WeaveRoute>[],
+    this.imports = const <WeaveModule>[],
+    WeaveContainer? parent,
+    // Parâmetro nomeado não pode começar com `_`.
+    // ignore: prefer_initializing_formals
+  }) : _parent = parent;
+
   /// Nome do módulo para identificação.
   final String name;
 
@@ -43,16 +55,26 @@ class WeaveModule {
   /// Sub-módulos importados.
   final List<WeaveModule> imports;
 
-  /// Container isolado deste módulo.
-  late final WeaveContainer container;
+  final WeaveContainer? _parent;
 
-  WeaveModule({
-    required this.name,
-    this.binds = const [],
-    this.routes = const [],
-    this.imports = const [],
-  }) {
-    container = WeaveContainerAdapter.create(name: name);
+  bool _installed = false;
+
+  /// Se [install] já rodou. Ver [WeaveModuleRegistry.installAll].
+  bool get isInstalled => _installed;
+
+  /// Container isolado deste módulo, escopo de [_parent].
+  ///
+  /// Criado sob demanda: um módulo declarado e nunca instalado não deve
+  /// registrar escopo nenhum no global.
+  late final WeaveContainer container = _createContainer();
+
+  WeaveContainer _createContainer() {
+    final WeaveContainer effectiveParent =
+        _parent ?? WeaveContainerAdapter.global;
+    if (effectiveParent is WeaveContainerAdapter) {
+      return effectiveParent.createScopeNamed(name);
+    }
+    return effectiveParent.createScope();
   }
 
   /// Lifecycle: chamado após todos os imports serem instalados.
@@ -61,44 +83,82 @@ class WeaveModule {
   /// Lifecycle: chamado quando o módulo é descartado.
   Future<void> onDispose() async {}
 
-  /// Obtém todas as rotas incluindo rotas de imports.
+  /// Todas as rotas, incluindo as dos imports, sem duplicar módulo.
   List<WeaveRoute> get allRoutes {
-    final result = <WeaveRoute>[];
-    for (final imp in imports) {
-      result.addAll(imp.allRoutes);
+    final List<WeaveRoute> result = <WeaveRoute>[];
+    for (final WeaveModule module in _graph()) {
+      result.addAll(module.routes);
     }
-    result.addAll(routes);
     return result;
   }
 
-  /// Instala os binds no container isolado do módulo.
-  void install() {
-    for (final imp in imports) {
-      imp.install();
+  /// O grafo de módulos em ordem topológica: import antes de quem importa.
+  ///
+  /// Deduplica por identidade e lança em ciclo.
+  List<WeaveModule> _graph() {
+    final List<WeaveModule> ordered = <WeaveModule>[];
+    final Set<WeaveModule> done = Set<WeaveModule>.identity();
+    final List<WeaveModule> path = <WeaveModule>[];
+
+    void visit(WeaveModule module) {
+      if (done.contains(module)) return;
+      if (path.any((WeaveModule m) => identical(m, module))) {
+        final String cycle =
+            <String>[...path.map((WeaveModule m) => m.name), module.name]
+                .join(' -> ');
+        throw StateError('Ciclo de módulos detectado: $cycle');
+      }
+      path.add(module);
+      for (final WeaveModule imported in module.imports) {
+        visit(imported);
+      }
+      path.removeLast();
+      done.add(module);
+      ordered.add(module);
     }
-    for (final bind in binds) {
+
+    visit(this);
+    return ordered;
+  }
+
+  /// Instala os binds no container do módulo.
+  ///
+  /// Idempotente: um módulo importado por dois outros é instalado uma vez
+  /// só, preservando as instâncias já criadas. Antes, o rebind descartava
+  /// silenciosamente o singleton vivo.
+  void install() {
+    for (final WeaveModule module in _graph()) {
+      module._installSelf();
+    }
+  }
+
+  void _installSelf() {
+    if (_installed) return;
+    _installed = true;
+    for (final WeaveBind bind in binds) {
       bind(container);
     }
   }
 
-  /// Instala os binds no container de um módulo específico.
+  /// Instala os binds em um container específico.
   void installInto(WeaveContainer targetContainer) {
-    for (final imp in imports) {
-      imp.installInto(targetContainer);
-    }
-    for (final bind in binds) {
-      bind(targetContainer);
+    for (final WeaveModule module in _graph()) {
+      for (final WeaveBind bind in module.binds) {
+        bind(targetContainer);
+      }
     }
   }
 
   /// Instala os binds no container global.
-  void installGlobal() {
-    for (final imp in imports) {
-      imp.installGlobal();
-    }
-    for (final bind in binds) {
-      bind(WeaveContainerAdapter.global);
-    }
+  void installGlobal() => installInto(WeaveContainerAdapter.global);
+
+  /// Descarta o escopo do módulo e permite reinstalar.
+  void disposeContainer() {
+    if (!_installed) return;
+    final WeaveContainer effectiveParent =
+        _parent ?? WeaveContainerAdapter.global;
+    effectiveParent.disposeScope(container);
+    _installed = false;
   }
 
   @override
@@ -108,43 +168,54 @@ class WeaveModule {
 /// Registry centralizado de módulos.
 ///
 /// Gerencia lifecycle e dependências entre módulos.
+///
 /// ```dart
 /// final registry = WeaveModuleRegistry();
 /// registry.register(AuthModule());
-/// registry.register(HomeModule(imports: [registry.get<AuthModule>('auth')]));
+/// registry.register(HomeModule());
 /// await registry.installAll();
-/// await registry.disposeAll();
 /// ```
 class WeaveModuleRegistry {
-  final Map<String, WeaveModule> _modules = {};
-  final List<WeaveModule> _order = [];
+  final Map<String, WeaveModule> _modules = <String, WeaveModule>{};
+  final List<WeaveModule> _order = <WeaveModule>[];
 
-  /// Registra um módulo.
+  /// Registra um módulo. Nome duplicado é erro.
   void register(WeaveModule module) {
+    final WeaveModule? existing = _modules[module.name];
+    if (existing != null) {
+      if (identical(existing, module)) return;
+      throw StateError(
+        'Já existe um módulo registrado com o nome "${module.name}".',
+      );
+    }
     _modules[module.name] = module;
     _order.add(module);
   }
 
   /// Obtém um módulo por nome.
   T get<T extends WeaveModule>(String name) {
-    final module = _modules[name];
+    final WeaveModule? module = _modules[name];
     if (module is T) return module;
     throw StateError('Module "$name" not found or wrong type');
   }
 
-  /// Instala todos os módulos registrados.
+  /// Instala todos os módulos registrados, em ordem topológica.
+  ///
+  /// `onInit` roda exatamente uma vez por módulo do grafo — incluindo
+  /// imports que não foram registrados diretamente, que antes nunca eram
+  /// inicializados.
   Future<void> installAll() async {
-    for (final module in _order) {
-      module.install();
+    for (final WeaveModule module in _resolvedOrder()) {
+      module._installSelf();
       await module.onInit();
     }
   }
 
-  /// Descarta todos os módulos registrados.
+  /// Descarta todos, na ordem inversa da instalação.
   Future<void> disposeAll() async {
-    for (final module in _order.reversed) {
+    for (final WeaveModule module in _resolvedOrder().reversed) {
       await module.onDispose();
-      module.container.reset();
+      module.disposeContainer();
     }
     _modules.clear();
     _order.clear();
@@ -156,15 +227,27 @@ class WeaveModuleRegistry {
     _order.clear();
   }
 
-  /// Retorna todos os módulos registrados.
-  List<WeaveModule> get modules => List.unmodifiable(_order);
+  /// Todos os módulos registrados, na ordem de registro.
+  List<WeaveModule> get modules => List<WeaveModule>.unmodifiable(_order);
 
-  /// Retorna todas as rotas de todos os módulos.
+  /// Todas as rotas de todos os módulos, sem duplicar módulo compartilhado.
   List<WeaveRoute> get allRoutes {
-    final result = <WeaveRoute>[];
-    for (final module in _order) {
-      result.addAll(module.allRoutes);
+    final List<WeaveRoute> result = <WeaveRoute>[];
+    for (final WeaveModule module in _resolvedOrder()) {
+      result.addAll(module.routes);
     }
     return result;
+  }
+
+  /// Ordem topológica sobre o grafo inteiro, deduplicada por identidade.
+  List<WeaveModule> _resolvedOrder() {
+    final List<WeaveModule> ordered = <WeaveModule>[];
+    final Set<WeaveModule> seen = Set<WeaveModule>.identity();
+    for (final WeaveModule root in _order) {
+      for (final WeaveModule module in root._graph()) {
+        if (seen.add(module)) ordered.add(module);
+      }
+    }
+    return ordered;
   }
 }

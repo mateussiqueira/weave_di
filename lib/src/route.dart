@@ -43,11 +43,20 @@ class WeaveTransition {
   static const none = WeaveTransition(type: WeaveTransitionType.none);
 
   /// Constrói um PageRouteBuilder com esta transição.
-  PageRouteBuilder<T> buildRoute<T>(Widget page) {
-    final effectiveDuration = duration ?? const Duration(milliseconds: 300);
-    final effectiveCurve = curve ?? Curves.easeInOut;
+  ///
+  /// [settings] carrega `name` e `arguments` para dentro da rota. Até a 2.0.0
+  /// não era repassado: toda rota com transição custom chegava ao `Navigator`
+  /// anônima, e nada que dependesse de `ModalRoute.of(context)?.settings`
+  /// funcionava nela.
+  PageRouteBuilder<T> buildRoute<T>(Widget page, {RouteSettings? settings}) {
+    final Duration effectiveDuration = duration ??
+        (type == WeaveTransitionType.none
+            ? Duration.zero
+            : const Duration(milliseconds: 300));
+    final Curve effectiveCurve = curve ?? Curves.easeInOut;
 
     return PageRouteBuilder<T>(
+      settings: settings,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionDuration: effectiveDuration,
       reverseTransitionDuration: effectiveDuration,
@@ -97,6 +106,11 @@ class WeaveParams {
   final Map<String, String> _params;
 
   const WeaveParams(this._params);
+
+  /// Cópia defensiva: o mapa de origem pode continuar sendo mutado por quem
+  /// o criou, e `WeaveParams` promete ser imutável.
+  WeaveParams.of(Map<String, String> params)
+      : _params = Map<String, String>.unmodifiable(params);
 
   /// Mapa raw dos parâmetros.
   Map<String, String> get raw => Map.unmodifiable(_params);
@@ -184,8 +198,16 @@ class WeaveParams {
         );
   }
 
+  // `_params.hashCode` é a identidade do Map, então dois WeaveParams iguais
+  // por `==` produziam hashes diferentes — contrato violado, e `Set` /
+  // `Map` tratavam iguais como distintos. Hash sobre as entradas ordenadas.
   @override
-  int get hashCode => _params.hashCode;
+  int get hashCode {
+    final List<String> keys = _params.keys.toList()..sort();
+    return Object.hashAll(<Object?>[
+      for (final String key in keys) ...<Object?>[key, _params[key]],
+    ]);
+  }
 }
 
 /// Uma rota no Weave.
@@ -226,10 +248,44 @@ class WeaveRoute {
   final List<WeaveRoute> children;
 
   /// Se é uma shell route (mantém layout pai).
+  @Deprecated(
+    'Shell routes não são consumidas pelo WeaveRouter. Ver CHANGELOG 2.1.0.',
+  )
   final bool isShell;
 
   /// Builder do shell (usado quando [isShell] é true).
+  @Deprecated(
+    'Shell routes não são consumidas pelo WeaveRouter. Ver CHANGELOG 2.1.0.',
+  )
   final Widget Function(BuildContext context, Widget child)? shellBuilder;
+
+  /// Condição de existência da rota, avaliada a cada match.
+  ///
+  /// Retornando `false`, a rota se comporta como se não estivesse
+  /// registrada: não casa, não aparece na busca por nome, e o path cai no
+  /// tratamento de rota desconhecida.
+  ///
+  /// É a primitiva de "um codebase, N variantes" — white-label, feature
+  /// flag, tier, região:
+  ///
+  /// ```dart
+  /// WeaveRoute(
+  ///   path: '/reseller',
+  ///   when: () => brand.hasResellers,
+  ///   builder: (_, _) => const ResellerPage(),
+  /// )
+  /// ```
+  final bool Function()? when;
+
+  /// Impede que o gate de guards embrulhe esta rota.
+  ///
+  /// Use no alvo de redirect de um guard (tipicamente `/login`): sem isso,
+  /// um middleware **global** embrulha o próprio destino e o redirect vira
+  /// laço estrutural.
+  final bool skipGuards;
+
+  /// Se a rota está ativa agora. Ver [when].
+  bool get isEnabled => when == null || when!();
 
   const WeaveRoute({
     required this.path,
@@ -241,12 +297,18 @@ class WeaveRoute {
     this.redirect,
     this.injectFactory,
     this.children = const [],
-    this.isShell = false,
-    this.shellBuilder,
+    @Deprecated('Ver CHANGELOG 2.1.0.') this.isShell = false,
+    @Deprecated('Ver CHANGELOG 2.1.0.') this.shellBuilder,
+    this.when,
+    this.skipGuards = false,
   });
 
   /// Cria uma shell route (mantém layout pai enquanto navega filhos).
-  const WeaveRoute.shell({
+  @Deprecated(
+    'O WeaveRouter não consome shell routes: a rota renderiza SizedBox vazio. '
+    'Componha o shell dentro do builder da página. Ver CHANGELOG 2.1.0.',
+  )
+  WeaveRoute.shell({
     required this.path,
     this.name,
     required this.shellBuilder,
@@ -257,7 +319,14 @@ class WeaveRoute {
     this.transition = WeaveTransition.material,
     this.redirect,
     this.injectFactory,
-  }) : isShell = true;
+    this.when,
+    this.skipGuards = false,
+  })  : isShell = true,
+        assert(
+          false,
+          'WeaveRoute.shell não é roteável nesta versão: o router ignora '
+          'isShell/shellBuilder/children e a rota renderiza vazio.',
+        );
 
   static Widget _defaultBuilder(BuildContext context, WeaveParams params) =>
       const SizedBox();
@@ -275,6 +344,8 @@ class WeaveRoute {
     List<WeaveRoute>? children,
     bool? isShell,
     Widget Function(BuildContext, Widget)? shellBuilder,
+    bool Function()? when,
+    bool? skipGuards,
   }) {
     return WeaveRoute(
       path: path ?? this.path,
@@ -286,23 +357,37 @@ class WeaveRoute {
       redirect: redirect ?? this.redirect,
       injectFactory: injectFactory ?? this.injectFactory,
       children: children ?? this.children,
+      // ignore: deprecated_member_use_from_same_package
       isShell: isShell ?? this.isShell,
+      // ignore: deprecated_member_use_from_same_package
       shellBuilder: shellBuilder ?? this.shellBuilder,
+      when: when ?? this.when,
+      skipGuards: skipGuards ?? this.skipGuards,
     );
   }
 
   /// Verifica se o path corresponde a esta rota.
+  ///
+  /// Barra final é ignorada (`/user/42/` casa com `/user/:id`) — deep link
+  /// chega com barra o tempo todo, e antes isso resultava em 404.
   bool matches(String routePath) {
-    final pathWithoutQuery = routePath.split('?').first;
-    final pattern = _toRegex(path);
-    return pattern.hasMatch(pathWithoutQuery);
+    final String pathWithoutQuery = _normalize(routePath);
+    return _toRegex(path).hasMatch(pathWithoutQuery);
+  }
+
+  static String _normalize(String routePath) {
+    final String withoutQuery = routePath.split('?').first;
+    if (withoutQuery.length > 1 && withoutQuery.endsWith('/')) {
+      return withoutQuery.substring(0, withoutQuery.length - 1);
+    }
+    return withoutQuery;
   }
 
   /// Extrai parâmetros de path (`:param`).
   Map<String, String> extractParams(String routePath) {
     final params = <String, String>{};
-    final pathWithoutQuery = routePath.split('?').first;
-    final patternParts = path.split('/');
+    final String pathWithoutQuery = _normalize(routePath);
+    final patternParts = _normalize(path).split('/');
     final routeParts = pathWithoutQuery.split('/');
 
     for (var i = 0; i < patternParts.length && i < routeParts.length; i++) {
@@ -314,31 +399,41 @@ class WeaveRoute {
   }
 
   /// Extrai query params de uma URL.
+  ///
+  /// Usa [Uri.splitQueryString], que decodifica `+` como espaço e aceita
+  /// flags sem valor (`?debug` vira `{'debug': ''}`). A implementação
+  /// anterior lançava em URI truncada (`?q=100%`) e descartava flags.
   static Map<String, String> extractQueryParams(String routePath) {
-    final queryParams = <String, String>{};
-    final queryIndex = routePath.indexOf('?');
-    if (queryIndex == -1) return queryParams;
+    final int queryIndex = routePath.indexOf('?');
+    if (queryIndex == -1) return <String, String>{};
 
-    final queryString = routePath.substring(queryIndex + 1);
-    final pairs = queryString.split('&');
+    final String queryString = routePath.substring(queryIndex + 1);
+    if (queryString.isEmpty) return <String, String>{};
 
-    for (final pair in pairs) {
-      final equalIndex = pair.indexOf('=');
-      if (equalIndex > 0) {
-        final key = Uri.decodeComponent(pair.substring(0, equalIndex));
-        final value = Uri.decodeComponent(pair.substring(equalIndex + 1));
-        queryParams[key] = value;
-      }
+    try {
+      return Uri.splitQueryString(queryString);
+    } catch (_) {
+      // `splitQueryString` lança ArgumentError em URI truncada (`?q=100%`)
+      // e FormatException em outros casos. Deep link malformado não pode
+      // derrubar a navegação — vale a pena engolir os dois aqui.
+      return <String, String>{};
     }
-    return queryParams;
   }
 
   /// Retorna todos os parâmetros (path + query) como [WeaveParams].
+  ///
+  /// Path vence query em caso de colisão: `/user/:id` acessado como
+  /// `/user/7?id=1` resolve `id` para `7`. O contrário deixaria um deep link
+  /// sobrescrever o identificador que os guards vão inspecionar.
   WeaveParams extractAllParams(String routePath) {
-    final pathParams = extractParams(routePath);
-    final queryParams = extractQueryParams(routePath);
-    return WeaveParams({...pathParams, ...queryParams});
+    return WeaveParams.of(allParamsMap(routePath));
   }
+
+  /// Mapa mutável com path + query. Path vence query.
+  Map<String, String> allParamsMap(String routePath) => <String, String>{
+        ...extractQueryParams(routePath),
+        ...extractParams(routePath),
+      };
 
   /// Busca uma rota filha que corresponda ao path.
   WeaveRouteMatch? matchChild(String fullPath) {
@@ -357,7 +452,7 @@ class WeaveRoute {
       if (child.matches(normalizedChildPath)) {
         return WeaveRouteMatch(
           route: child,
-          params: child.extractParams(normalizedChildPath),
+          params: child.allParamsMap(normalizedChildPath),
         );
       }
     }
@@ -365,7 +460,7 @@ class WeaveRoute {
   }
 
   static RegExp _toRegex(String path) {
-    final pathWithoutQuery = path.split('?').first;
+    final String pathWithoutQuery = _normalize(path);
     final regexStr = pathWithoutQuery
         .split('/')
         .map((part) {

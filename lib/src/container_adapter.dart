@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'container.dart';
+import 'logger.dart';
 
 enum _Lifetime { singleton, transient, lazy }
 
@@ -10,14 +11,21 @@ enum _Lifetime { singleton, transient, lazy }
 /// tipos de binding, scopes, override pra testes, e detecção de
 /// dependências circulares.
 class WeaveContainerAdapter implements WeaveContainer {
-  WeaveContainerAdapter({this.name = 'default'});
+  // Parâmetro nomeado não pode começar com `_`, então `this._logger` não é
+  // possível aqui — a sugestão do lint não se aplica.
+  WeaveContainerAdapter({this.name = 'default', WeaveLogger? logger})
+      // ignore: prefer_initializing_formals
+      : _logger = logger;
 
   /// Instância global padrão.
   static final WeaveContainerAdapter global = WeaveContainerAdapter(name: 'global');
 
   /// Cria uma nova instância do container.
-  static WeaveContainerAdapter create({String name = 'default'}) =>
-      WeaveContainerAdapter(name: name);
+  static WeaveContainerAdapter create({
+    String name = 'default',
+    WeaveLogger? logger,
+  }) =>
+      WeaveContainerAdapter(name: name, logger: logger);
 
   @override
   final String name;
@@ -28,11 +36,10 @@ class WeaveContainerAdapter implements WeaveContainer {
   WeaveContainerAdapter? _parent;
   final Set<Type> _resolutionStack = {};
   void Function()? _onDispose;
+  final WeaveLogger? _logger;
 
-  void _log(String message) {
-    // ignore: avoid_print
-    print('[Weave:$name] $message');
-  }
+  void _log(String message) =>
+      WeaveLog.write('Weave:$name', message, override: _logger);
 
   @override
   void bind<T>(WeaveFactory<T> factory) {
@@ -93,8 +100,10 @@ class WeaveContainerAdapter implements WeaveContainer {
   @override
   T get<T>() {
     if (_resolutionStack.contains(T)) {
-      final cycle = _resolutionStack.toList()..add(T);
-      _resolutionStack.clear();
+      // Não limpar a pilha aqui: cada frame já se remove no `finally`, e
+      // limpar destrói os frames de quem está acima. Com `tryGet` engolindo
+      // o erro, a limpeza desarmava a própria detecção de ciclo.
+      final List<Type> cycle = <Type>[..._resolutionStack, T];
       throw StateError(
         'Circular dependency detected: ${cycle.join(' -> ')}',
       );
@@ -167,6 +176,7 @@ class WeaveContainerAdapter implements WeaveContainer {
   @override
   void unbind<T>() {
     _registrations.remove(T);
+    _overrides.remove(T);
   }
 
   @override
@@ -186,8 +196,23 @@ class WeaveContainerAdapter implements WeaveContainer {
   }
 
   @override
-  WeaveContainer createScope({void Function()? onDispose}) {
-    final scope = WeaveContainerAdapter(name: '$name.scope${_scopes.length}');
+  WeaveContainer createScope({void Function()? onDispose}) =>
+      createScopeNamed(null, onDispose: onDispose);
+
+  /// Como [createScope], mas com nome legível para diagnóstico.
+  ///
+  /// Fora da interface [WeaveContainer] de propósito: acrescentar membro a
+  /// uma interface pública quebra quem a implementa com `implements`.
+  WeaveContainerAdapter createScopeNamed(
+    String? scopeName, {
+    void Function()? onDispose,
+  }) {
+    final WeaveContainerAdapter scope = WeaveContainerAdapter(
+      name: scopeName == null
+          ? '$name.scope${_scopes.length}'
+          : '$name.$scopeName',
+      logger: _logger,
+    );
     scope._parent = this;
     scope._onDispose = onDispose;
     _scopes.add(scope);
@@ -197,14 +222,22 @@ class WeaveContainerAdapter implements WeaveContainer {
 
   @override
   void disposeScope(WeaveContainer scope) {
-    if (scope is WeaveContainerAdapter) {
-      scope._onDispose?.call();
-      scope._registrations.clear();
-      scope._overrides.clear();
-      scope._parent = null;
-      _scopes.remove(scope);
-      _log('Disposed scope: ${scope.name}');
+    if (scope is! WeaveContainerAdapter) return;
+    assert(
+      identical(scope._parent, this),
+      'disposeScope: "${scope.name}" não é escopo de "$name".',
+    );
+    // Descarta em profundidade: um escopo com filhos vazava os netos.
+    for (final WeaveContainerAdapter child
+        in List<WeaveContainerAdapter>.of(scope._scopes)) {
+      scope.disposeScope(child);
     }
+    scope._onDispose?.call();
+    scope._registrations.clear();
+    scope._overrides.clear();
+    scope._parent = null;
+    _scopes.remove(scope);
+    _log('Disposed scope: ${scope.name}');
   }
 
   @override

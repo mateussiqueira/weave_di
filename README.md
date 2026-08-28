@@ -2,7 +2,7 @@
 
 > Um framework de DI + rotas pra Flutter que eu criei porque estava cansado de boilerplate.
 
-[![pub package](https://img.shields.io/pub/v/weave.svg)](https://pub.dev/packages/weave)
+[![pub package](https://img.shields.io/pub/v/weave_di.svg)](https://pub.dev/packages/weave_di)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## Por que Weave?
@@ -19,7 +19,7 @@ Weave resolve isso com uma abordagem simples: **um container de DI enxuto** + **
 
 ```yaml
 dependencies:
-  weave: ^2.0.0
+  weave_di: ^2.1.0
 ```
 
 Depois é só rodar:
@@ -33,7 +33,7 @@ flutter pub get
 ### 1. Configurando o Container
 
 ```dart
-import 'package:weave/weave.dart';
+import 'package:weave_di/weave_di.dart';
 
 // O container global já vem pronto
 WeaveContainerAdapter.global.bindSingleton<AuthService>(
@@ -79,9 +79,18 @@ final appRouter = WeaveRouter(
 ```dart
 MaterialApp(
   onGenerateRoute: appRouter.routeFactory,
-  home: const HomePage(),
+  onGenerateInitialRoutes: appRouter.onGenerateInitialRoutes,
+  initialRoute: '/',
 );
 ```
+
+> Use `initialRoute` com `/` registrada no router, **não** `home:`. O widget
+> passado em `home:` não passa por `onGenerateRoute`, e portanto escapa de
+> guards, middlewares e redirects.
+>
+> `onGenerateInitialRoutes` também importa: sem ele, um deep link `/user/42`
+> é quebrado pelo Flutter em `/`, `/user` e `/user/42`, e os três viram
+> páginas empilhadas.
 
 ## Funcionalidades
 
@@ -184,9 +193,51 @@ WeaveGuard.deny();
 // Aplicando à rota
 WeaveRoute(
   path: '/admin',
-  builder: (_) => const AdminPage(),
+  builder: (_, _) => const AdminPage(),
   guards: [authGuard],
 );
+```
+
+Desde a 2.1.0 os guards rodam **também** em `onGenerateRoute` — antes só a
+navegação programática os respeitava, e deep link entrava direto em rota
+protegida. Enquanto o guard decide, a rota mostra `guardPendingBuilder`; se
+negar sem ter para onde voltar, mostra `guardBlockedBuilder`.
+
+```dart
+WeaveRouter(
+  routes: routes,
+  guardPendingBuilder: (_) => const Scaffold(body: Center(
+    child: CircularProgressIndicator(),
+  )),
+  guardBlockedBuilder: (_) => const Scaffold(body: Center(
+    child: Text('Acesso negado'),
+  )),
+);
+```
+
+#### Redirect a partir de um guard
+
+Um guard não deve mexer no `Navigator` por conta própria: durante o `await`
+o topo da pilha pode não ser mais a rota dele. Implemente
+`WeaveRedirectingGuard` e devolva a decisão:
+
+```dart
+class AuthGuard implements WeaveRedirectingGuard {
+  @override
+  Future<WeaveGuardResult> resolve(context, route, params, matched) async =>
+      isLogged ? const WeaveGuardResult.allow()
+               : const WeaveGuardResult.redirect('/login');
+
+  @override
+  Future<bool> canActivate(context, route, params, matched) async => isLogged;
+}
+```
+
+Marque o destino com `skipGuards: true`, senão um middleware **global**
+embrulha o próprio `/login` e o redirect vira laço:
+
+```dart
+WeaveRoute(path: '/login', skipGuards: true, builder: (_, _) => LoginPage());
 ```
 
 ### Middleware
@@ -215,24 +266,31 @@ WeaveMiddleware.onNavigateAction(
 WeaveRoute(
   path: '/old-page',
   redirect: (context, params) => '/new-page',
-  builder: (_) => const SizedBox(), // nunca chega aqui
+  builder: (_, _) => const SizedBox(), // nunca chega aqui
 );
 ```
 
 ### Rotas Aninhadas
+
+> **Não implementado.** `children` é aceito pela `WeaveRoute` mas o router
+> não o consome — a rota filha nunca é construída. Depreciado na 2.1.0.
 
 ```dart
 WeaveRoute(
   path: '/dashboard',
   builder: (context, params) => const DashboardLayout(),
   children: [
-    WeaveRoute(path: '/stats', builder: (_, __) => StatsPage()),
-    WeaveRoute(path: '/settings', builder: (_, __) => SettingsPage()),
+    WeaveRoute(path: '/stats', builder: (_, _) => StatsPage()),
+    WeaveRoute(path: '/settings', builder: (_, _) => SettingsPage()),
   ],
 );
 ```
 
 ### Shell Routes
+
+> **Não implementado.** Nada em `router.dart` referencia `WeaveShellRoute`,
+> `isShell` ou `shellBuilder`; a rota renderiza um `SizedBox` vazio.
+> Depreciado na 2.1.0 — componha o shell dentro do builder da página.
 
 ```dart
 WeaveShellRoute(
@@ -242,9 +300,38 @@ WeaveShellRoute(
     bottomNavigationBar: BottomNavigationBar(...),
   ),
   routes: [
-    WeaveRoute(path: '/home', builder: (_, __) => HomePage()),
-    WeaveRoute(path: '/settings', builder: (_, __) => SettingsPage()),
+    WeaveRoute(path: '/home', builder: (_, _) => HomePage()),
+    WeaveRoute(path: '/settings', builder: (_, _) => SettingsPage()),
   ],
+);
+```
+
+### Rotas condicionais e composição de router
+
+Um codebase que vira vários apps — white-label, feature flag, tier, região.
+
+`when` decide se a rota existe, avaliado a cada match. Retornando `false`, ela
+se comporta como se não estivesse registrada: não casa, não aparece na busca
+por nome, e o path cai no tratamento de rota desconhecida.
+
+```dart
+WeaveRoute(
+  path: '/reseller',
+  when: () => brand.hasResellers,
+  builder: (_, _) => const ResellerPage(),
+);
+```
+
+`WeaveRouter.merge` compõe uma base com sobrescritas. Rota cujo `path` já
+existe na base **substitui no lugar dela**, preservando a ordem de declaração
+— o que importa, porque `match` devolve a primeira que casar e ordem é
+precedência (`/user/new` declarada antes de `/user/:id` continua vencendo).
+Path inédito é anexado ao fim.
+
+```dart
+final router = WeaveRouter.merge(
+  base: appRoutes,
+  overrides: brand.routeOverrides,
 );
 ```
 
@@ -253,14 +340,14 @@ WeaveShellRoute(
 ```dart
 WeaveRoute(
   path: '/login',
-  builder: (_) => const LoginPage(),
+  builder: (_, _) => const LoginPage(),
   transition: WeaveTransition.fade,
 );
 
 // Transição customizada
 WeaveRoute(
   path: '/animated',
-  builder: (_) => const AnimatedPage(),
+  builder: (_, _) => const AnimatedPage(),
   transition: WeaveTransition(
     type: WeaveTransitionType.fade,
     duration: Duration(milliseconds: 500),
@@ -271,20 +358,20 @@ WeaveRoute(
 
 ### Módulos com Lifecycle
 
+`name`, `binds` e `routes` são campos do construtor, não getters
+sobrescrevíveis:
+
 ```dart
 class AuthModule extends WeaveModule {
-  @override
-  String get name => 'auth';
-
-  @override
-  List<WeaveBind> get binds => [
-    (c) => c.bindSingleton<AuthService>(() => AuthServiceImpl()),
-  ];
-
-  @override
-  List<WeaveRoute> get routes => [
-    WeaveRoute(path: '/login', builder: (_, __) => LoginPage()),
-  ];
+  AuthModule() : super(
+    name: 'auth',
+    binds: [
+      (c) => c.bindSingleton<AuthService>(() => AuthServiceImpl()),
+    ],
+    routes: [
+      WeaveRoute(path: '/login', builder: (_, _) => LoginPage()),
+    ],
+  );
 
   @override
   Future<void> onInit() async {
@@ -300,10 +387,40 @@ class AuthModule extends WeaveModule {
 // Registry
 final registry = WeaveModuleRegistry();
 registry.register(AuthModule());
-registry.register(HomeModule(imports: [registry.get<AuthModule>('auth')]));
+registry.register(HomeModule());
 await registry.installAll();
 // ... usar módulos ...
 await registry.disposeAll();
+```
+
+`installAll` resolve a ordem topologicamente pelos `imports`, então a ordem de
+registro não importa. Um módulo importado por dois outros é instalado uma vez
+só — e `onInit` roda exatamente uma vez por módulo do grafo, inclusive para
+imports que nunca foram registrados diretamente.
+
+O container do módulo é um **escopo do global**: o que não estiver registrado
+nele é resolvido subindo. Para que as rotas do módulo resolvam a partir dele,
+passe o container ao router:
+
+```dart
+final router = WeaveRouter(
+  routes: module.allRoutes,
+  container: module.container,
+);
+```
+
+### Diagnóstico
+
+O Weave é **silencioso por padrão**. Até a 2.0.0 o container fazia um `print`
+a cada resolução, inclusive em release.
+
+```dart
+// Liga o log só em debug
+WeaveLog.logger = kDebugMode ? WeaveLog.debugPrintLogger : null;
+
+// Ou por container/router
+WeaveContainerAdapter.create(name: 'auth', logger: meuLogger);
+WeaveRouter(routes: routes, logger: meuLogger);
 ```
 
 ### Navegação

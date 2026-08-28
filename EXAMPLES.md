@@ -7,7 +7,7 @@ Exemplos práticos de como usar o Weave em projetos reais.
 ### Setup do Container
 
 ```dart
-import 'package:weave/weave.dart';
+import 'package:weave_di/weave_di.dart';
 
 void setupDI() {
   final c = WeaveContainerAdapter.global;
@@ -119,8 +119,8 @@ class AuthModule extends WeaveModule {
 
   @override
   List<WeaveRoute> get routes => [
-    WeaveRoute(path: '/login', builder: (_, __) => const LoginPage()),
-    WeaveRoute(path: '/register', builder: (_, __) => const RegisterPage()),
+    WeaveRoute(path: '/login', builder: (_, _) => const LoginPage()),
+    WeaveRoute(path: '/register', builder: (_, _) => const RegisterPage()),
   ];
 
   @override
@@ -151,7 +151,7 @@ class HomeModule extends WeaveModule {
   List<WeaveRoute> get routes => [
     WeaveRoute(
       path: '/home',
-      builder: (_, __) => const HomePage(),
+      builder: (_, _) => const HomePage(),
       guards: [WeaveGuard.auth(
         isAuthenticated: (ctx) => ctx.get<AuthService>().isAuthenticated,
       )],
@@ -221,9 +221,9 @@ final appRouter = WeaveRouter(
         ),
       ),
       routes: [
-        WeaveRoute(path: '/home', builder: (_, __) => const HomePage()),
-        WeaveRoute(path: '/search', builder: (_, __) => const SearchPage()),
-        WeaveRoute(path: '/profile', builder: (_, __) => const ProfilePage()),
+        WeaveRoute(path: '/home', builder: (_, _) => const HomePage()),
+        WeaveRoute(path: '/search', builder: (_, _) => const SearchPage()),
+        WeaveRoute(path: '/profile', builder: (_, _) => const ProfilePage()),
       ],
     ),
   ],
@@ -426,7 +426,7 @@ test('route guard blocks unauthenticated user', () async {
     routes: [
       WeaveRoute(
         path: '/protected',
-        builder: (_, __) => const ProtectedPage(),
+        builder: (_, _) => const ProtectedPage(),
         guards: [WeaveGuard.auth(
           isAuthenticated: (ctx) => ctx.get<AuthService>().isAuthenticated,
           loginPath: '/login',
@@ -434,7 +434,7 @@ test('route guard blocks unauthenticated user', () async {
       ),
       WeaveRoute(
         path: '/login',
-        builder: (_, __) => const LoginPage(),
+        builder: (_, _) => const LoginPage(),
       ),
     ],
   );
@@ -483,8 +483,8 @@ WeaveShellRoute(
     body: child,
   ),
   routes: [
-    WeaveRoute(path: '/home', builder: (_, __) => const DashboardHome()),
-    WeaveRoute(path: '/settings', builder: (_, __) => const SettingsPage()),
+    WeaveRoute(path: '/home', builder: (_, _) => const DashboardHome()),
+    WeaveRoute(path: '/settings', builder: (_, _) => const SettingsPage()),
   ],
 );
 ```
@@ -573,8 +573,8 @@ WeaveShellRoute(
     );
   },
   routes: [
-    WeaveRoute(path: '/home', builder: (_, __) => const HomePage()),
-    WeaveRoute(path: '/settings', builder: (_, __) => const SettingsPage()),
+    WeaveRoute(path: '/home', builder: (_, _) => const HomePage()),
+    WeaveRoute(path: '/settings', builder: (_, _) => const SettingsPage()),
   ],
 );
 ```
