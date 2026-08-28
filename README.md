@@ -17,9 +17,15 @@ Weave resolve isso com uma abordagem simples: **um container de DI enxuto** + **
 
 ## Instalação
 
+Via git, fixando uma tag — sempre uma tag, nunca a branch, senão a dependência
+flutua e um push no `main` muda o build de todo mundo:
+
 ```yaml
 dependencies:
-  weave_di: ^2.1.0
+  weave_di:
+    git:
+      url: https://github.com/mateussiqueira/weave_di.git
+      ref: v2.2.0
 ```
 
 Depois é só rodar:
@@ -27,6 +33,8 @@ Depois é só rodar:
 ```bash
 flutter pub get
 ```
+
+Para atualizar, troque a tag e rode `flutter pub upgrade weave_di`.
 
 ## Quick Start
 

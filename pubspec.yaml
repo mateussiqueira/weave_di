@@ -4,9 +4,9 @@ description: >-
   Scopes, parameterized factories, circular-dependency detection,
   route guards, middleware and transitions. No code generation.
 version: 2.2.0
-repository: https://github.com/digital-core/weave
-homepage: https://github.com/digital-core/weave
-issue_tracker: https://github.com/digital-core/weave/issues
+repository: https://github.com/mateussiqueira/weave_di
+homepage: https://github.com/mateussiqueira/weave_di
+issue_tracker: https://github.com/mateussiqueira/weave_di/issues
 topics:
   - dependency-injection
   - routing
