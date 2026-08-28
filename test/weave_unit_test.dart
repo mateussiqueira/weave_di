@@ -419,31 +419,6 @@ void main() {
     });
   });
 
-  group('WeaveBinding', () {
-    test('create registers singleton', () {
-      final container = WeaveContainerAdapter(name: 'binding-test');
-      final binding = WeaveBinding.create<String>(
-        name: 'string',
-        factory: () => 'bound',
-        singleton: true,
-      );
-      binding.applyTo(container);
-      expect(container.get<String>(), 'bound');
-    });
-
-    test('create registers transient', () {
-      final container = WeaveContainerAdapter(name: 'binding-test');
-      final binding = WeaveBinding.create<_TestService>(
-        name: 'service',
-        factory: () => _TestService('bound'),
-      );
-      binding.applyTo(container);
-      final a = container.get<_TestService>();
-      final b = container.get<_TestService>();
-      expect(a.name, 'bound');
-      expect(identical(a, b), isFalse);
-    });
-  });
 
   group('WeaveModule', () {
     test('install registers binds', () {
@@ -491,57 +466,6 @@ void main() {
     });
   });
 
-  group('WeaveShellRoute', () {
-    test('matchChild finds child route', () {
-      final shell = WeaveShellRoute(
-        path: '/app',
-        shellBuilder: (context, child) => Scaffold(body: child),
-        routes: [
-          WeaveRoute(
-            path: '/home',
-            builder: (ctx, params) => const Text('Home'),
-          ),
-          WeaveRoute(
-            path: '/settings',
-            builder: (ctx, params) => const Text('Settings'),
-          ),
-        ],
-      );
-      final match = shell.matchChild('/app/home');
-      expect(match, isNotNull);
-      expect(match!.route.path, '/home');
-    });
-
-    test('matchChild returns null for unknown child', () {
-      final shell = WeaveShellRoute(
-        path: '/app',
-        shellBuilder: (context, child) => Scaffold(body: child),
-        routes: [
-          WeaveRoute(
-            path: '/home',
-            builder: (ctx, params) => const Text('Home'),
-          ),
-        ],
-      );
-      expect(shell.matchChild('/app/unknown'), isNull);
-    });
-
-    test('matchChild handles nested paths', () {
-      final shell = WeaveShellRoute(
-        path: '/app',
-        shellBuilder: (context, child) => Scaffold(body: child),
-        routes: [
-          WeaveRoute(
-            path: '/user/:id',
-            builder: (ctx, params) => const Text('User'),
-          ),
-        ],
-      );
-      final match = shell.matchChild('/app/user/42');
-      expect(match, isNotNull);
-      expect(match!.params['id'], '42');
-    });
-  });
 
   group('WeaveTransition', () {
     test('material transition is default', () {

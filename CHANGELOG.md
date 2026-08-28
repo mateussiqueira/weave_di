@@ -7,6 +7,89 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [3.0.0] - 2026-08-28
+
+**Mudança de licença.** Da 3.0.0 em diante este software é **proprietário**.
+As versões até a 2.2.0 foram distribuídas sob MIT; aquela concessão não é
+revogada e não pode ser revogada retroativamente para as cópias já obtidas.
+Ver `LICENSE`. Titular do copyright corrigido para Mateus Siqueira.
+
+Distribuição por git com tag fixa, em repositório privado. Não há publicação
+no pub.dev a partir desta versão.
+
+### Quebra
+
+- **`WeaveContainer` mudou.** Todo `bind*`/`get*` ganhou `{Object? name}`, e
+  nasceram `bindEagerSingleton`, `canResolve`, `warmUp`, `validate` e
+  `describe`. Em Dart, acrescentar membro ou parâmetro opcional a uma
+  `abstract class` invalida o override de quem a implementa com `implements`
+  — inclusive com corpo default. Quem tinha um fake de `WeaveContainer`
+  escrito à mão precisa reimplementar; quem só **usa** o container não muda
+  uma linha.
+- **`tryGet` deixou de engolir tudo.** Agora só a ausência de registro devolve
+  `null`. Ciclo e exceção lançada pela sua factory sobem. Silenciá-los
+  escondia bug e desarmava a detecção de ciclo, porque a factory seguia
+  rodando depois do erro.
+- **`isRegistered` virou local.** Responde "está registrado *neste*
+  container", sem subir para o pai. Para a pergunta antiga use `canResolve`.
+  São perguntas diferentes e estavam confundidas numa só.
+- **Shell routes removidas**: `WeaveShellRoute`, `WeaveShellOutlet`,
+  `WeaveRoute.shell`, `isShell`, `shellBuilder` e `matchChild`. Nunca foram
+  consumidas pelo router. O substituto é `layoutBuilder` + `children`, da
+  2.2.0, que funciona.
+- **`WeaveBinding` removido.** Era código órfão. Use `WeaveModule`.
+
+### Adicionado
+
+- **Bindings nomeados.** A chave do registro passou de `Type` para
+  `(Type, Object?)`. Duas implementações do mesmo tipo convivem, e o nome pode
+  ser qualquer objeto — `String`, enum, o que for.
+
+  ```dart
+  c.bindSingleton<HttpClient>(() => PublicClient(), name: 'public');
+  c.bindSingleton<HttpClient>(() => AuthedClient(), name: 'authed');
+  final client = c.get<HttpClient>(name: 'authed');
+  ```
+
+  Nome **não é curinga**: pedir sem nome não encontra um binding nomeado, e
+  vice-versa. `_overrides` e a pilha de resolução usam a mesma chave.
+- **Erros tipados** — `WeaveNotRegisteredError`,
+  `WeaveCircularDependencyError` e `WeaveMissingTypeArgumentError`. Os dois
+  primeiros estendem `StateError`, então `catch (StateError)` existente
+  continua funcionando. A mensagem de "não registrado" agora diz **quais
+  containers foram percorridos** e **o que existe neles** — antes só dizia o
+  tipo que faltava, o que em um app com 16 módulos é caça ao tesouro.
+- **`bindEagerSingleton` + `warmUp()`.** Eager de verdade, materializado por
+  `warmUp` e não no momento do bind — no bind as dependências dele podem
+  ainda não estar registradas. `warmUp` é idempotente e agrega as falhas em
+  vez de parar na primeira. Até a 2.x `bindSingleton` e `bindLazy` eram
+  idênticos e não existia eager nenhum, apesar da doc distinguir os dois.
+- **`dispose` por binding.** `bindSingleton(factory, dispose: ...)` roda o
+  callback quando a instância é descartada por `unbind`, `resetSingletons`,
+  `reset`, `disposeScope` ou rebind. Instância que nunca foi criada não
+  recebe dispose.
+- **`validate()`** — percorre os registros, tenta resolver e devolve um
+  `WeaveValidationReport` com faltantes, ciclos e factories que lançaram.
+  Feito para rodar em teste: **instancia objetos de verdade**. Não deixa
+  rastro — o que não existia antes da chamada é descartado no fim.
+- **`describe()`**, **`lineage`** e **`registeredKeys`** para diagnóstico.
+- **`canResolve<T>({Object? name})`** — a semântica que `isRegistered` tinha.
+
+### Migração
+
+Uso comum não muda: `bind*`, `get`, escopos e módulos continuam iguais, e o
+parâmetro `name` é opcional em tudo. O que precisa de atenção:
+
+| Se você… | Faça |
+|---|---|
+| implementava `WeaveContainer` à mão | reimplemente, ou estenda `WeaveContainerAdapter` |
+| usava `isRegistered` esperando que subisse ao pai | troque por `canResolve` |
+| dependia de `tryGet` engolindo qualquer erro | trate a exceção — ela indicava um bug |
+| usava shell routes | `layoutBuilder` + `children` |
+| usava `WeaveBinding` | `WeaveModule` |
+
+---
+
 ## [2.2.0] - 2026-08-28
 
 Rotas hierárquicas — o que `children` e as shell routes prometiam desde a

@@ -138,15 +138,31 @@ void main() {
   });
 
   group('G3 · detecção de ciclo sobrevive a tryGet', () {
-    test('ciclo através de tryGet não vira recursão infinita', () {
+    test('ciclo através de tryGet é reportado, não engolido', () {
       final WeaveContainerAdapter c = WeaveContainerAdapter.create(name: 'cy');
       c.bindLazy<_Svc>(() {
         c.tryGet<_Svc>();
         return _Svc('a');
       });
-      // Antes, o clear() da pilha desarmava a detecção e isso estourava
-      // em StackOverflow.
-      expect(c.get<_Svc>().tag, 'a');
+      // 2.1.0: o clear() da pilha desarmava a detecção e isso estourava em
+      // StackOverflow; a correção fez `tryGet` devolver null em silêncio.
+      // 3.0.0: `tryGet` só engole ausência de registro. Pedir a si mesmo de
+      // dentro da própria factory É um ciclo, e agora aparece.
+      expect(
+        () => c.get<_Svc>(),
+        throwsA(isA<WeaveCircularDependencyError>()),
+      );
+    });
+
+    test('tryGet devolve null para tipo simplesmente não registrado', () {
+      final WeaveContainerAdapter c = WeaveContainerAdapter.create(name: 'cy3');
+      expect(c.tryGet<_Svc>(), isNull);
+    });
+
+    test('tryGet NÃO engole exceção da factory do usuário', () {
+      final WeaveContainerAdapter c = WeaveContainerAdapter.create(name: 'cy4');
+      c.bindLazy<_Svc>(() => throw const FormatException('boom'));
+      expect(() => c.tryGet<_Svc>(), throwsFormatException);
     });
 
     test('ciclo direto continua sendo reportado', () {

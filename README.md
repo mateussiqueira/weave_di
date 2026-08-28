@@ -1,5 +1,8 @@
 # Weave
 
+> **Software proprietário.** Copyright (c) 2026 Mateus Siqueira.
+> Ver `LICENSE` — versões até a 2.2.0 foram MIT; da 3.0.0 em diante, não.
+
 > Um framework de DI + rotas pra Flutter que eu criei porque estava cansado de boilerplate.
 
 [![pub package](https://img.shields.io/pub/v/weave_di.svg)](https://pub.dev/packages/weave_di)
@@ -25,7 +28,7 @@ dependencies:
   weave_di:
     git:
       url: https://github.com/mateussiqueira/weave_di.git
-      ref: v2.2.0
+      ref: v3.0.0
 ```
 
 Depois é só rodar:

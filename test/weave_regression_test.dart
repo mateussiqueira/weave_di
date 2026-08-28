@@ -293,20 +293,6 @@ void main() {
   });
 
   // ───────────────────────────────────────────────────────────────────────
-  group('B3 · WeaveRoute.shell continua const e não derruba o app', () {
-    test('construtor const compila e não lança', () {
-      // Se `const` sumir ou o assert(false) voltar, isto quebra.
-      // ignore: deprecated_member_use_from_same_package
-      const WeaveRoute shell = WeaveRoute.shell(
-        path: '/app',
-        shellBuilder: _shellBuilder,
-        children: <WeaveRoute>[],
-      );
-      expect(shell.path, '/app');
-      // ignore: deprecated_member_use_from_same_package
-      expect(shell.isShell, isTrue);
-    });
-  });
 
   // ───────────────────────────────────────────────────────────────────────
   group('B4 · reinstalar módulo devolve container vivo', () {
@@ -562,7 +548,6 @@ void main() {
   });
 }
 
-Widget _shellBuilder(BuildContext context, Widget child) => child;
 
 class _Counting extends WeaveModule {
   _Counting(String name) : super(name: name);

@@ -288,20 +288,6 @@ class WeaveRoute {
   /// ```
   final Widget Function(BuildContext context, Widget child)? layoutBuilder;
 
-  /// Se é uma shell route (mantém layout pai).
-  @Deprecated(
-    'Use `layoutBuilder` + `children`, que fazem o que shell route prometia. '
-    'Ver CHANGELOG 2.2.0.',
-  )
-  final bool isShell;
-
-  /// Builder do shell (usado quando [isShell] é true).
-  @Deprecated(
-    'Use `layoutBuilder`, que é consumido pelo router e envolve a subárvore. '
-    'Ver CHANGELOG 2.2.0.',
-  )
-  final Widget Function(BuildContext context, Widget child)? shellBuilder;
-
   /// Condição de existência da rota, avaliada a cada match.
   ///
   /// Retornando `false`, a rota se comporta como se não estivesse
@@ -341,40 +327,11 @@ class WeaveRoute {
     this.injectFactory,
     this.children = const [],
     this.layoutBuilder,
-    @Deprecated('Ver CHANGELOG 2.1.0.') this.isShell = false,
-    @Deprecated('Ver CHANGELOG 2.1.0.') this.shellBuilder,
     this.when,
     this.skipGuards = false,
   });
 
   /// Cria uma shell route (mantém layout pai enquanto navega filhos).
-  @Deprecated(
-    'O WeaveRouter não consome shell routes: a rota renderiza SizedBox vazio. '
-    'Componha o shell dentro do builder da página. Ver CHANGELOG 2.1.0.',
-  )
-  // `const` preservado: removê-lo quebraria em tempo de compilação quem
-  // declara `const WeaveRoute.shell(...)` na 2.0.0. A depreciação avisa; um
-  // `assert(false)` derrubaria o `main()` de quem já convive com a tela
-  // vazia hoje, e isso não cabe numa minor.
-  const WeaveRoute.shell({
-    required this.path,
-    this.name,
-    required this.shellBuilder,
-    required this.children,
-    this.builder = _defaultBuilder,
-    this.guards = const [],
-    this.middlewares = const [],
-    this.transition = WeaveTransition.material,
-    this.redirect,
-    this.injectFactory,
-    this.when,
-    this.skipGuards = false,
-  })  : isShell = true,
-        layoutBuilder = null;
-
-  static Widget _defaultBuilder(BuildContext context, WeaveParams params) =>
-      const SizedBox();
-
   /// Cópia com valores sobrescritos.
   WeaveRoute copyWith({
     String? path,
@@ -387,8 +344,6 @@ class WeaveRoute {
     Widget Function(BuildContext, WeaveParams, WeaveContainer)? injectFactory,
     List<WeaveRoute>? children,
     Widget Function(BuildContext, Widget)? layoutBuilder,
-    bool? isShell,
-    Widget Function(BuildContext, Widget)? shellBuilder,
     bool Function()? when,
     bool? skipGuards,
   }) {
@@ -403,10 +358,6 @@ class WeaveRoute {
       injectFactory: injectFactory ?? this.injectFactory,
       children: children ?? this.children,
       layoutBuilder: layoutBuilder ?? this.layoutBuilder,
-      // ignore: deprecated_member_use_from_same_package
-      isShell: isShell ?? this.isShell,
-      // ignore: deprecated_member_use_from_same_package
-      shellBuilder: shellBuilder ?? this.shellBuilder,
       when: when ?? this.when,
       skipGuards: skipGuards ?? this.skipGuards,
     );
@@ -492,30 +443,6 @@ class WeaveRoute {
         ...extractQueryParams(routePath),
         ...extractParams(routePath),
       };
-
-  /// Busca uma rota filha que corresponda ao path.
-  WeaveRouteMatch? matchChild(String fullPath) {
-    if (children.isEmpty) return null;
-
-    // Normaliza o path relativo ao parent
-    final parentPath = path.endsWith('/') ? path : '$path/';
-    if (!fullPath.startsWith(parentPath)) return null;
-
-    final childPath = fullPath.substring(parentPath.length - 1);
-    final normalizedChildPath = childPath.startsWith('/')
-        ? childPath
-        : '/$childPath';
-
-    for (final child in children) {
-      if (child.matches(normalizedChildPath)) {
-        return WeaveRouteMatch(
-          route: child,
-          params: child.allParamsMap(normalizedChildPath),
-        );
-      }
-    }
-    return null;
-  }
 
   static RegExp _toRegex(String path) {
     final String pathWithoutQuery = _normalize(path);
