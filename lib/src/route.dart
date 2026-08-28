@@ -244,22 +244,61 @@ class WeaveRoute {
   )?
   injectFactory;
 
-  /// Rotas filhas (para rotas aninhadas).
-  @Deprecated(
-    'O WeaveRouter não consome `children`: a rota filha nunca é construída. '
-    'Ver CHANGELOG 2.1.0.',
-  )
+  /// Rotas filhas, com path **relativo** ao desta rota.
+  ///
+  /// O router achata a árvore na construção: `/estabelecimentos` com filho
+  /// `/:slug` que por sua vez tem `/produtos/:id` vira a rota absoluta
+  /// `/estabelecimentos/:slug/produtos/:id`. Casamento, params e query usam
+  /// o mesmo mecanismo das rotas planas.
+  ///
+  /// O filho herda [guards] e [middlewares] dos ancestrais, e é envolvido
+  /// pelo [layoutBuilder] deles.
+  ///
+  /// ```dart
+  /// WeaveRoute(
+  ///   path: '/lojas',
+  ///   builder: (_, _) => const StoreListPage(),
+  ///   children: <WeaveRoute>[
+  ///     WeaveRoute(
+  ///       path: '/:slug',
+  ///       builder: (_, p) => StorePage(slug: p.getString('slug')),
+  ///       children: <WeaveRoute>[
+  ///         WeaveRoute(path: '/produtos/:id', builder: ...),
+  ///       ],
+  ///     ),
+  ///   ],
+  /// )
+  /// ```
   final List<WeaveRoute> children;
+
+  /// Envolve as páginas desta rota e de toda a subárvore dela.
+  ///
+  /// É o layout persistente de uma seção — o cabeçalho da loja que continua
+  /// visível enquanto se navega entre categorias e produtos. Composição de
+  /// widget, não Navigator aninhado: o estado do layout é reconstruído a
+  /// cada rota, e a pilha continua sendo uma só.
+  ///
+  /// ```dart
+  /// WeaveRoute(
+  ///   path: '/lojas/:slug',
+  ///   layoutBuilder: (context, child) => StoreShell(child: child),
+  ///   builder: (_, _) => const StoreHome(),
+  ///   children: <WeaveRoute>[...],
+  /// )
+  /// ```
+  final Widget Function(BuildContext context, Widget child)? layoutBuilder;
 
   /// Se é uma shell route (mantém layout pai).
   @Deprecated(
-    'Shell routes não são consumidas pelo WeaveRouter. Ver CHANGELOG 2.1.0.',
+    'Use `layoutBuilder` + `children`, que fazem o que shell route prometia. '
+    'Ver CHANGELOG 2.2.0.',
   )
   final bool isShell;
 
   /// Builder do shell (usado quando [isShell] é true).
   @Deprecated(
-    'Shell routes não são consumidas pelo WeaveRouter. Ver CHANGELOG 2.1.0.',
+    'Use `layoutBuilder`, que é consumido pelo router e envolve a subárvore. '
+    'Ver CHANGELOG 2.2.0.',
   )
   final Widget Function(BuildContext context, Widget child)? shellBuilder;
 
@@ -301,6 +340,7 @@ class WeaveRoute {
     this.redirect,
     this.injectFactory,
     this.children = const [],
+    this.layoutBuilder,
     @Deprecated('Ver CHANGELOG 2.1.0.') this.isShell = false,
     @Deprecated('Ver CHANGELOG 2.1.0.') this.shellBuilder,
     this.when,
@@ -329,7 +369,8 @@ class WeaveRoute {
     this.injectFactory,
     this.when,
     this.skipGuards = false,
-  }) : isShell = true;
+  })  : isShell = true,
+        layoutBuilder = null;
 
   static Widget _defaultBuilder(BuildContext context, WeaveParams params) =>
       const SizedBox();
@@ -345,6 +386,7 @@ class WeaveRoute {
     String? Function(BuildContext, WeaveParams)? redirect,
     Widget Function(BuildContext, WeaveParams, WeaveContainer)? injectFactory,
     List<WeaveRoute>? children,
+    Widget Function(BuildContext, Widget)? layoutBuilder,
     bool? isShell,
     Widget Function(BuildContext, Widget)? shellBuilder,
     bool Function()? when,
@@ -360,6 +402,7 @@ class WeaveRoute {
       redirect: redirect ?? this.redirect,
       injectFactory: injectFactory ?? this.injectFactory,
       children: children ?? this.children,
+      layoutBuilder: layoutBuilder ?? this.layoutBuilder,
       // ignore: deprecated_member_use_from_same_package
       isShell: isShell ?? this.isShell,
       // ignore: deprecated_member_use_from_same_package
@@ -499,5 +542,15 @@ class WeaveRouteMatch {
   /// Parâmetros extraídos do path.
   final Map<String, String> params;
 
-  const WeaveRouteMatch({required this.route, required this.params});
+  /// Ancestrais da rota, do topo até o pai direto. Vazio para rota raiz.
+  ///
+  /// É o que dá breadcrumb sem cirurgia de string: em
+  /// `/cadernos/:id/gabarito`, são `/cadernos` e `/cadernos/:id`.
+  final List<WeaveRoute> ancestors;
+
+  const WeaveRouteMatch({
+    required this.route,
+    required this.params,
+    this.ancestors = const <WeaveRoute>[],
+  });
 }

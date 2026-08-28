@@ -272,69 +272,65 @@ WeaveRoute(
 
 ### Rotas Aninhadas
 
-> **Não implementado.** `children` é aceito pela `WeaveRoute` mas o router
-> não o consome — a rota filha nunca é construída. Depreciado na 2.1.0.
+O `children` declara a árvore com path **relativo**; o router a achata em
+paths absolutos na construção. Casamento, params e query usam o mesmo
+mecanismo das rotas planas.
 
 ```dart
 WeaveRoute(
-  path: '/dashboard',
-  builder: (context, params) => const DashboardLayout(),
+  path: '/estabelecimentos',
+  name: 'lojas',
+  builder: (_, _) => const StoreListPage(),
   children: [
-    WeaveRoute(path: '/stats', builder: (_, _) => StatsPage()),
-    WeaveRoute(path: '/settings', builder: (_, _) => SettingsPage()),
+    WeaveRoute(
+      path: '/:slug',
+      name: 'loja',
+      layoutBuilder: (context, child) => StoreShell(child: child),
+      builder: (_, p) => StorePage(slug: p.getString('slug')),
+      children: [
+        WeaveRoute(path: '/categorias/:cat', builder: ...),
+        WeaveRoute(path: '/produtos/:id',    builder: ...),
+      ],
+    ),
   ],
 );
+// vira /estabelecimentos, /estabelecimentos/:slug,
+//      /estabelecimentos/:slug/categorias/:cat,
+//      /estabelecimentos/:slug/produtos/:id
 ```
 
-### Shell Routes
+O filho **herda guards e middlewares** dos ancestrais: proteger
+`/estabelecimentos` protege a subárvore inteira. Um módulo pode declarar a
+própria subárvore e ser dono dela.
 
-> **Não implementado.** Nada em `router.dart` referencia `WeaveShellRoute`,
-> `isShell` ou `shellBuilder`; a rota renderiza um `SizedBox` vazio.
-> Depreciado na 2.1.0 — componha o shell dentro do builder da página.
+**`layoutBuilder`** envolve a rota e toda a subárvore dela — é o cabeçalho da
+loja que permanece enquanto se navega entre categorias e produtos. É
+composição de widget, não Navigator aninhado: a pilha continua sendo uma só e
+o layout é reconstruído a cada rota.
+
+**Breadcrumb** sai de `match.ancestors`, sem cirurgia de string:
 
 ```dart
-WeaveShellRoute(
-  path: '/app',
-  shellBuilder: (context, child) => Scaffold(
-    body: child,
-    bottomNavigationBar: BottomNavigationBar(...),
-  ),
-  routes: [
-    WeaveRoute(path: '/home', builder: (_, _) => HomePage()),
-    WeaveRoute(path: '/settings', builder: (_, _) => SettingsPage()),
-  ],
-);
+final match = router.match('/estabelecimentos/ze/produtos/42')!;
+match.ancestors.map((r) => r.name);   // ['lojas', 'loja']
 ```
 
-### Rotas condicionais e composição de router
+### Deep link em hierarquia (web e apps modulares)
 
-Um codebase que vira vários apps — feature flag, plano pago, rollout
-regional, build de demonstração.
-
-`when` decide se a rota existe, avaliado a cada match. Retornando `false`, ela
-se comporta como se não estivesse registrada: não casa, não aparece na busca
-por nome, e o path cai no tratamento de rota desconhecida.
+Entrar direto em `/cadernos/7/gabarito` — por URL na web, por push
+notification, ou pelo botão voltar do browser — normalmente cria **uma** rota
+só, e o voltar fecha o app. Com `stackAncestorsOnDeepLink` a pilha é montada
+inteira:
 
 ```dart
-WeaveRoute(
-  path: '/beta',
-  when: () => flags.betaEnabled,
-  builder: (_, _) => const BetaPage(),
+WeaveRouter(
+  routes: routes,
+  stackAncestorsOnDeepLink: true,
 );
+// /cadernos/7/gabarito  ->  [/cadernos, /cadernos/7, /cadernos/7/gabarito]
 ```
 
-`WeaveRouter.merge` compõe uma base com sobrescritas. Rota cujo `path` já
-existe na base **substitui no lugar dela**, preservando a ordem de declaração
-— o que importa, porque `match` devolve a primeira que casar e ordem é
-precedência (`/user/new` declarada antes de `/user/:id` continua vencendo).
-Path inédito é anexado ao fim.
-
-```dart
-final router = WeaveRouter.merge(
-  base: appRoutes,
-  overrides: variant.routeOverrides,
-);
-```
+Segmento sem rota registrada é pulado, não vira 404. A query fica só na folha.
 
 ### Transições
 

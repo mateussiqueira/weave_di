@@ -7,6 +7,59 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [2.2.0] - 2026-08-28
+
+Rotas hierárquicas — o que `children` e as shell routes prometiam desde a
+2.0.0 e nunca fizeram. Serve os dois casos que motivaram o desenho original:
+web, onde a URL é a navegação (`/estabelecimentos/:slug/produtos/:id`), e app
+modular, onde cada módulo é dono de uma subárvore (`/cadernos/:id/gabarito`).
+
+### Adicionado
+
+- **`WeaveRoute.children` agora é consumido pelo router.** A árvore é achatada
+  na construção: filho declara path relativo, o router deriva o absoluto. Todo
+  o mecanismo de casamento, params e query é o mesmo das rotas planas. Filho
+  pode declarar com ou sem barra inicial.
+- **Herança de guards e middlewares.** Proteger `/cadernos` protege
+  `/cadernos/:id/gabarito`. O guard do avô entra uma vez só no neto.
+- **`WeaveRoute.layoutBuilder`** — envolve a rota e a subárvore dela. É o
+  cabeçalho da loja que permanece enquanto se navega entre categorias e
+  produtos. Composição de widget, não Navigator aninhado: uma pilha só, e o
+  layout é reconstruído a cada rota. Layouts aninhados se compõem do mais
+  externo para o mais interno.
+- **`WeaveRouteMatch.ancestors`** e **`WeaveRouter.ancestorsOf`** — a cadeia de
+  pais, para breadcrumb sem cirurgia de string.
+- **`WeaveRouter.flatRoutes`** — a árvore achatada, com paths absolutos e
+  herança aplicada. `routes` continua devolvendo o que foi declarado.
+- **`WeaveRouter.stackAncestorsOnDeepLink`** — deep link em folha passa a
+  montar a pilha inteira, então o voltar sobe a árvore em vez de fechar o app.
+  `/cadernos/7/gabarito` vira `/cadernos` → `/cadernos/7` →
+  `/cadernos/7/gabarito`. Segmento sem rota é pulado; a query fica só na
+  folha. `false` por padrão, porque numa declaração plana não há ancestral a
+  empilhar.
+
+### Depreciado
+
+- `WeaveShellRoute`, `WeaveRoute.shell`, `isShell` e `shellBuilder` agora
+  apontam para o substituto real: `layoutBuilder` + `children`. Antes a
+  depreciação só dizia que não funcionavam.
+
+### Corrigido
+
+- A documentação pública ensinava `WeaveRoute.when` com `/reseller` e
+  `brand.hasResellers` — o modelo de negócio de um app específico dentro de um
+  package genérico. Trocado por feature flag.
+- `description` do pubspec em inglês: é o snippet de busca do pub.dev.
+- Topic `state-management` removido — contradizia a seção "O que não está no
+  escopo" do próprio ARCHITECTURE.md e atraía a busca errada.
+
+### Compatibilidade
+
+Aditivo. Declaração plana continua idêntica, inclusive na identidade dos
+objetos `WeaveRoute` em `flatRoutes`.
+
+---
+
 ## [2.1.0] - 2026-08-28
 
 Release de correções. Nada da interface `WeaveContainer` foi tocado, de

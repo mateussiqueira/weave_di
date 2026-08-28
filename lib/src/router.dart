@@ -22,6 +22,7 @@ class WeaveRouter {
     this.guardBlockedBuilder,
     this.onUnknownRoute,
     this.maxRedirects = 5,
+    this.stackAncestorsOnDeepLink = false,
   }) : assert(maxRedirects > 0, 'maxRedirects deve ser positivo');
 
   /// Compõe um router a partir de uma lista base mais sobrescritas.
@@ -82,8 +83,78 @@ class WeaveRouter {
     return result;
   }
 
+  /// As rotas como foram declaradas — possivelmente uma árvore.
   final List<WeaveRoute> routes;
+
   final List<WeaveMiddleware> middlewares;
+
+  List<WeaveRoute>? _flat;
+  final Map<WeaveRoute, List<WeaveRoute>> _ancestors =
+      Map<WeaveRoute, List<WeaveRoute>>.identity();
+
+  /// A árvore achatada: uma entrada por rota, com path absoluto, guards e
+  /// middlewares dos ancestrais já embutidos.
+  ///
+  /// É sobre esta lista que [match] e [routeByName] trabalham. Para uma
+  /// declaração plana, é idêntica a [routes].
+  List<WeaveRoute> get flatRoutes => _flat ??= _flatten();
+
+  List<WeaveRoute> _flatten() {
+    final List<WeaveRoute> out = <WeaveRoute>[];
+
+    void walk(WeaveRoute route, String prefix, List<WeaveRoute> chain) {
+      final String absolute = _joinPaths(prefix, route.path);
+
+      // Rota de topo sem filhos é usada como veio — nada a herdar, nada a
+      // reescrever. Mantém a identidade, o que importa para quem já guarda
+      // referências às próprias rotas.
+      final WeaveRoute effective = chain.isEmpty
+          ? route
+          : route.copyWith(
+              path: absolute,
+              // Guard e middleware de ancestral valem para a subárvore
+              // inteira: proteger `/cadernos` protege `/cadernos/:id/gabarito`.
+              //
+              // Só o pai DIRETO entra: ele já acumulou os dele na própria
+              // passagem. Somar a cadeia toda duplicaria o guard do avô no
+              // neto, e um guard que roda duas vezes é um bug silencioso.
+              guards: <WeaveRouteGuard>[
+                ...chain.last.guards,
+                ...route.guards,
+              ],
+              middlewares: <WeaveMiddleware>[
+                ...chain.last.middlewares,
+                ...route.middlewares,
+              ],
+            );
+
+      out.add(effective);
+      _ancestors[effective] = List<WeaveRoute>.unmodifiable(chain);
+
+      for (final WeaveRoute child in route.children) {
+        walk(child, absolute, <WeaveRoute>[...chain, effective]);
+      }
+    }
+
+    for (final WeaveRoute route in routes) {
+      walk(route, '', const <WeaveRoute>[]);
+    }
+    return List<WeaveRoute>.unmodifiable(out);
+  }
+
+  static String _joinPaths(String prefix, String path) {
+    if (prefix.isEmpty) return path;
+    final String left =
+        prefix.endsWith('/') ? prefix.substring(0, prefix.length - 1) : prefix;
+    final String right = path.startsWith('/') ? path : '/$path';
+    return '$left$right';
+  }
+
+  /// Os ancestrais de uma rota achatada, do topo até o pai direto.
+  ///
+  /// Vazio para rota raiz. É o que dá breadcrumb sem cirurgia de string.
+  List<WeaveRoute> ancestorsOf(WeaveRoute route) =>
+      _ancestors[route] ?? const <WeaveRoute>[];
 
   /// Logger deste router. Quando nulo, cai em [WeaveLog.logger].
   final WeaveLogger? logger;
@@ -114,6 +185,17 @@ class WeaveRouter {
   /// Teto de saltos numa cadeia de redirects.
   final int maxRedirects;
 
+  /// Se um deep link em folha de hierarquia deve empilhar os ancestrais.
+  ///
+  /// Ligue em app hierárquico — web com URL, ou app organizado por módulos
+  /// que possuem subárvores. Entrar direto em `/cadernos/7/gabarito` passa a
+  /// montar a pilha `/cadernos` → `/cadernos/7` → `/cadernos/7/gabarito`, e o
+  /// voltar sobe a árvore em vez de fechar o app.
+  ///
+  /// `false` por padrão: numa declaração plana não há ancestral a empilhar, e
+  /// mudar o default alteraria o comportamento de quem já publicou.
+  final bool stackAncestorsOnDeepLink;
+
   /// Container efetivo para resolução.
   WeaveContainer get effectiveContainer =>
       container ?? WeaveContainerAdapter.global;
@@ -128,13 +210,14 @@ class WeaveRouter {
   ///
   /// Rota com [WeaveRoute.when] falso é ignorada, como se não existisse.
   WeaveRouteMatch? match(String path) {
-    for (final WeaveRoute route in routes) {
+    for (final WeaveRoute route in flatRoutes) {
       if (!route.isEnabled) continue;
       if (route.matches(path)) {
         _log('Matched: ${route.path} for path: $path');
         return WeaveRouteMatch(
           route: route,
           params: route.allParamsMap(path),
+          ancestors: ancestorsOf(route),
         );
       }
     }
@@ -144,7 +227,7 @@ class WeaveRouter {
 
   /// Busca uma rota pelo nome, respeitando [WeaveRoute.when].
   WeaveRoute? routeByName(String name) {
-    for (final WeaveRoute route in routes) {
+    for (final WeaveRoute route in flatRoutes) {
       if (route.name == name && route.isEnabled) return route;
     }
     return null;
@@ -228,10 +311,32 @@ class WeaveRouter {
     WeaveRoute route,
     WeaveParams params,
   ) {
-    if (route.injectFactory != null) {
-      return route.injectFactory!(context, params, effectiveContainer);
+    Widget page = route.injectFactory != null
+        ? route.injectFactory!(context, params, effectiveContainer)
+        : route.builder(context, params);
+
+    // Layout dos ancestrais, do mais interno para o mais externo: o shell da
+    // loja envolve a página do produto, e o shell da seção envolve os dois.
+    page = _wrapInLayouts(context, route, page);
+    return page;
+  }
+
+  Widget _wrapInLayouts(
+    BuildContext context,
+    WeaveRoute route,
+    Widget page,
+  ) {
+    Widget result = page;
+    if (route.layoutBuilder != null) {
+      result = route.layoutBuilder!(context, result);
     }
-    return route.builder(context, params);
+    final List<WeaveRoute> chain = ancestorsOf(route);
+    for (final WeaveRoute ancestor in chain.reversed) {
+      if (ancestor.layoutBuilder != null) {
+        result = ancestor.layoutBuilder!(context, result);
+      }
+    }
+    return result;
   }
 
   /// Placeholder enquanto os guards decidem.
@@ -264,9 +369,60 @@ class WeaveRouter {
   /// `/user` e `/user/42` e empilha os três — e como o factory nunca devolve
   /// `null`, os dois primeiros viram páginas de 404 embaixo do destino.
   List<Route<dynamic>> onGenerateInitialRoutes(String initialRoute) {
-    final Route<dynamic>? route =
-        _createRouteFactory(RouteSettings(name: initialRoute));
-    return <Route<dynamic>>[?route];
+    if (!stackAncestorsOnDeepLink) {
+      final Route<dynamic>? route =
+          _createRouteFactory(RouteSettings(name: initialRoute));
+      return <Route<dynamic>>[?route];
+    }
+
+    // Deep link em folha de hierarquia: empilha os ancestrais que existem,
+    // para que o voltar (do Android ou do browser) suba a árvore em vez de
+    // sair do app. `/cadernos/7/gabarito` vira /cadernos -> /cadernos/7 ->
+    // /cadernos/7/gabarito. Segmento sem rota é pulado, não vira 404.
+    final WeaveRouteMatch? leaf = match(initialRoute);
+    if (leaf == null) {
+      final Route<dynamic>? route =
+          _createRouteFactory(RouteSettings(name: initialRoute));
+      return <Route<dynamic>>[?route];
+    }
+
+    final String query = initialRoute.contains('?')
+        ? initialRoute.substring(initialRoute.indexOf('?'))
+        : '';
+    final WeaveParams params = WeaveParams.of(leaf.params);
+
+    final List<Route<dynamic>> stack = <Route<dynamic>>[];
+    for (final WeaveRoute ancestor in leaf.ancestors) {
+      final String? concrete = _concretize(ancestor.path, params);
+      if (concrete == null) continue;
+      final Route<dynamic>? route =
+          _createRouteFactory(RouteSettings(name: concrete));
+      if (route != null) stack.add(route);
+    }
+
+    final Route<dynamic>? leafRoute = _createRouteFactory(
+      RouteSettings(name: '${_concretize(leaf.route.path, params) ?? initialRoute}$query'),
+    );
+    if (leafRoute != null) stack.add(leafRoute);
+
+    return stack.isEmpty
+        ? <Route<dynamic>>[?_createRouteFactory(RouteSettings(name: initialRoute))]
+        : stack;
+  }
+
+  /// Substitui os `:segmentos` de um path pelos valores já conhecidos.
+  /// Devolve `null` se algum parâmetro não estiver disponível.
+  static String? _concretize(String pattern, WeaveParams params) {
+    if (!pattern.contains(':')) return pattern;
+    final List<String> parts = pattern.split('/');
+    for (int i = 0; i < parts.length; i++) {
+      final String part = parts[i];
+      if (!part.startsWith(':')) continue;
+      final String value = params.getString(part.substring(1));
+      if (value.isEmpty) return null;
+      parts[i] = Uri.encodeComponent(value);
+    }
+    return parts.join('/');
   }
 
   Route<dynamic>? _createRouteFactory(RouteSettings settings) {
