@@ -269,14 +269,14 @@ class WeaveRoute {
   /// registrada: não casa, não aparece na busca por nome, e o path cai no
   /// tratamento de rota desconhecida.
   ///
-  /// É a primitiva de "um codebase, N variantes" — white-label, feature
-  /// flag, tier, região:
+  /// É a primitiva de "um codebase, N variantes" — feature flag, plano
+  /// pago, rollout regional, build de demonstração:
   ///
   /// ```dart
   /// WeaveRoute(
-  ///   path: '/reseller',
-  ///   when: () => brand.hasResellers,
-  ///   builder: (_, _) => const ResellerPage(),
+  ///   path: '/beta',
+  ///   when: () => flags.betaEnabled,
+  ///   builder: (_, _) => const BetaPage(),
   /// )
   /// ```
   final bool Function()? when;

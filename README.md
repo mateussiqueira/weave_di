@@ -308,7 +308,8 @@ WeaveShellRoute(
 
 ### Rotas condicionais e composição de router
 
-Um codebase que vira vários apps — white-label, feature flag, tier, região.
+Um codebase que vira vários apps — feature flag, plano pago, rollout
+regional, build de demonstração.
 
 `when` decide se a rota existe, avaliado a cada match. Retornando `false`, ela
 se comporta como se não estivesse registrada: não casa, não aparece na busca
@@ -316,9 +317,9 @@ por nome, e o path cai no tratamento de rota desconhecida.
 
 ```dart
 WeaveRoute(
-  path: '/reseller',
-  when: () => brand.hasResellers,
-  builder: (_, _) => const ResellerPage(),
+  path: '/beta',
+  when: () => flags.betaEnabled,
+  builder: (_, _) => const BetaPage(),
 );
 ```
 
@@ -331,7 +332,7 @@ Path inédito é anexado ao fim.
 ```dart
 final router = WeaveRouter.merge(
   base: appRoutes,
-  overrides: brand.routeOverrides,
+  overrides: variant.routeOverrides,
 );
 ```
 
