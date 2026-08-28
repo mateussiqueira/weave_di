@@ -1,0 +1,36 @@
+# Dart and Flutter
+.dart_tool/
+.packages
+pubspec.lock
+build/
+*.iml
+.idea/
+.vscode/
+
+# Platform-specific
+android/.gradle/
+android/app/debug/
+android/app/profile/
+android/app/release/
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+macos/Pods/
+macos/Flutter/ephemeral/
+macos/Flutter/GeneratedPluginRegistrant.swift
+
+# Coverage
+coverage/
+
+# IDE
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+.test_coverage.dart

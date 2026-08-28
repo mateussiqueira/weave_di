@@ -1,0 +1,28 @@
+name: weave_di
+description: >-
+  DI + rotas pra Flutter. Simples, tipado, sem boilerplate.
+  Container de injeção com scopes, factories com parâmetros, e
+  um sistema de rotas com guards, middleware e transições.
+version: 2.0.0
+repository: https://github.com/digital-core/weave
+homepage: https://github.com/digital-core/weave
+issue_tracker: https://github.com/digital-core/weave/issues
+topics:
+  - dependency-injection
+  - routing
+  - navigation
+  - modular
+  - state-management
+
+environment:
+  sdk: ^3.12.0
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
