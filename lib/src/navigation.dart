@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'gate.dart';
+import 'guard.dart';
 import 'route.dart';
 import 'router.dart';
 
@@ -145,8 +146,35 @@ extension WeaveNavigation on BuildContext {
     }
 
     if (!mounted) return null;
-    final bool allowed = await router.canActivateRoute(this, path, routeMatch);
-    if (!allowed || !mounted) return null;
+    final WeaveGuardResult decision =
+        await router.resolveGuards(this, path, routeMatch);
+    if (!mounted) return null;
+
+    switch (decision) {
+      case WeaveGuardBlock():
+        return null;
+      case WeaveGuardRedirect(
+          path: final String target,
+          arguments: final Object? redirectArgs,
+        ):
+        // Sem isto, um WeaveRedirectingGuard (e portanto WeaveGuard.auth)
+        // vira no-op mudo em toda a API de navegação por extensão: o
+        // resultado colapsava em `false` e o destino era descartado.
+        if (chain.length >= router.maxRedirects || chain.contains(target)) {
+          router.log(
+            'Redirect loop abortado: ${<String>[...chain, target].join(' -> ')}',
+          );
+          return null;
+        }
+        return _resolve<T>(
+          router,
+          target,
+          redirectArgs ?? arguments,
+          <String>[...chain, path],
+        );
+      case WeaveGuardAllow():
+        break;
+    }
 
     Widget buildPage(BuildContext context) =>
         router.buildPage(context, route, params);
@@ -173,22 +201,31 @@ extension WeaveNavigation on BuildContext {
   static String _materialize(String path, Map<String, String> params) {
     if (!path.contains(':')) return path;
 
+    // Acumula as chaves não resolvidas em vez de procurar ':' no resultado:
+    // um segmento estático legítimo como `/at/12:30` tornava a rota
+    // inalcançável por nome.
+    final List<String> missing = <String>[];
     final String result = path
         .split('/')
         .map((String part) {
           if (!part.startsWith(':')) return part;
           final String key = part.substring(1);
           final String? value = params[key];
-          if (value == null) return part;
+          // Valor vazio é tão inútil quanto ausente — antes virava um
+          // no-op mudo, com o Future completando null e nada acontecendo.
+          if (value == null || value.isEmpty) {
+            missing.add(key);
+            return part;
+          }
           return Uri.encodeComponent(value);
         })
         .join('/');
 
-    if (result.contains(':')) {
+    if (missing.isNotEmpty) {
       throw ArgumentError.value(
         params,
         'params',
-        'Faltam parâmetros para o path "$path" (resultou em "$result")',
+        'Faltam parâmetros para o path "$path": ${missing.join(', ')}',
       );
     }
     return result;

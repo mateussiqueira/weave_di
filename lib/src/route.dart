@@ -245,6 +245,10 @@ class WeaveRoute {
   injectFactory;
 
   /// Rotas filhas (para rotas aninhadas).
+  @Deprecated(
+    'O WeaveRouter não consome `children`: a rota filha nunca é construída. '
+    'Ver CHANGELOG 2.1.0.',
+  )
   final List<WeaveRoute> children;
 
   /// Se é uma shell route (mantém layout pai).
@@ -308,7 +312,11 @@ class WeaveRoute {
     'O WeaveRouter não consome shell routes: a rota renderiza SizedBox vazio. '
     'Componha o shell dentro do builder da página. Ver CHANGELOG 2.1.0.',
   )
-  WeaveRoute.shell({
+  // `const` preservado: removê-lo quebraria em tempo de compilação quem
+  // declara `const WeaveRoute.shell(...)` na 2.0.0. A depreciação avisa; um
+  // `assert(false)` derrubaria o `main()` de quem já convive com a tela
+  // vazia hoje, e isso não cabe numa minor.
+  const WeaveRoute.shell({
     required this.path,
     this.name,
     required this.shellBuilder,
@@ -321,12 +329,7 @@ class WeaveRoute {
     this.injectFactory,
     this.when,
     this.skipGuards = false,
-  })  : isShell = true,
-        assert(
-          false,
-          'WeaveRoute.shell não é roteável nesta versão: o router ignora '
-          'isShell/shellBuilder/children e a rota renderiza vazio.',
-        );
+  }) : isShell = true;
 
   static Widget _defaultBuilder(BuildContext context, WeaveParams params) =>
       const SizedBox();
@@ -392,10 +395,22 @@ class WeaveRoute {
 
     for (var i = 0; i < patternParts.length && i < routeParts.length; i++) {
       if (patternParts[i].startsWith(':')) {
-        params[patternParts[i].substring(1)] = routeParts[i];
+        params[patternParts[i].substring(1)] = _decode(routeParts[i]);
       }
     }
     return params;
+  }
+
+  /// Path param chega percent-encoded (`/user/a%2Fb`) e a página precisa do
+  /// valor real. `extractQueryParams` já decodifica via `splitQueryString`;
+  /// sem isto os dois lados divergiam para a mesma entrada.
+  static String _decode(String segment) {
+    if (!segment.contains('%') && !segment.contains('+')) return segment;
+    try {
+      return Uri.decodeComponent(segment);
+    } catch (_) {
+      return segment;
+    }
   }
 
   /// Extrai query params de uma URL.

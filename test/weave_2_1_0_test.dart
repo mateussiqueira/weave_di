@@ -623,11 +623,13 @@ void main() {
       expect(find.text('user 42'), findsOneWidget);
     });
 
-    test('param faltando é ArgumentError', () {
+    // O caso de ArgumentError é coberto em weave_regression_test.dart, que
+    // exercita a navegação de verdade. Aqui só a busca por nome.
+    test('routeByName encontra a rota parametrizada', () {
       final WeaveRouter router = WeaveRouter(
         routes: <WeaveRoute>[_page('/user/:id', 'u', name: 'user')],
       );
-      expect(router.routeByName('user'), isNotNull);
+      expect(router.routeByName('user')?.path, '/user/:id');
     });
   });
 

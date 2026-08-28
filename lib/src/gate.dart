@@ -83,6 +83,15 @@ class _WeaveRouteGateState extends State<WeaveRouteGate> {
     );
 
     if (!mounted) return;
+    // `mounted` continua true durante toda a animação de pop, então sozinho
+    // ele deixa o gate empurrar um redirect sobre a tela para a qual o
+    // usuário acabou de voltar. `isActive` é o discriminador correto.
+    if (self != null && !self.isActive) {
+      widget.router.log(
+        'Gate descartado: ${widget.fullPath} saiu da pilha antes da decisão.',
+      );
+      return;
+    }
 
     switch (result) {
       case WeaveGuardAllow():
@@ -113,10 +122,28 @@ class _WeaveRouteGateState extends State<WeaveRouteGate> {
       return;
     }
 
-    navigator.pushNamed<void>(
-      target,
-      arguments: WeaveGateArguments(userArguments: arguments, chain: chain),
-    );
+    if (widget.router.match(target) == null) {
+      widget.router.log('Redirect para rota inexistente: $target');
+      _terminate(navigator, self);
+      return;
+    }
+
+    final WeaveGateArguments envelope =
+        WeaveGateArguments(userArguments: arguments, chain: chain);
+
+    // Se esta rota não é mais o topo — outra tela foi empurrada durante o
+    // await — `pushNamed` roubaria a tela dela. `replace` troca no lugar
+    // certo, por identidade.
+    if (self != null && !self.isCurrent) {
+      final Route<dynamic>? replacement = navigator.widget.onGenerateRoute
+          ?.call(RouteSettings(name: target, arguments: envelope));
+      if (replacement != null) {
+        navigator.replace<dynamic>(oldRoute: self, newRoute: replacement);
+        return;
+      }
+    }
+
+    navigator.pushNamed<void>(target, arguments: envelope);
     // Remoção por identidade. `pushReplacement` miraria o topo da pilha, que
     // pode não ser esta rota se algo foi empurrado durante o await.
     if (self != null) navigator.removeRoute(self);

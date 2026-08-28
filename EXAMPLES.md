@@ -192,6 +192,11 @@ void main() async {
 
 ## 3. Shell Route com Bottom Nav
 
+> ⚠️ **Não implementado.** `WeaveShellRoute` está depreciada na 2.1.0: nada
+> em `router.dart` a referencia, então este exemplo não funciona. Componha o
+> shell dentro do `builder` da página — um `Scaffold` com `bottomNavigationBar`
+> que troca o corpo conforme o estado, ou um `Navigator` aninhado.
+
 ### Definição
 
 ```dart
@@ -449,6 +454,11 @@ test('route guard blocks unauthenticated user', () async {
 
 ## 8. Shell Route com Drawer
 
+> ⚠️ **Não implementado.** `WeaveShellRoute` está depreciada na 2.1.0: nada
+> em `router.dart` a referencia, então este exemplo não funciona. Componha o
+> shell dentro do `builder` da página — um `Scaffold` com `bottomNavigationBar`
+> que troca o corpo conforme o estado, ou um `Navigator` aninhado.
+
 ```dart
 WeaveShellRoute(
   path: '/dashboard',
@@ -534,6 +544,11 @@ WeaveRoute(
 ```
 
 ## 10. Multi-Navigator com Shell
+
+> ⚠️ **Não implementado.** `WeaveShellRoute` está depreciada na 2.1.0: nada
+> em `router.dart` a referencia, então este exemplo não funciona. Componha o
+> shell dentro do `builder` da página — um `Scaffold` com `bottomNavigationBar`
+> que troca o corpo conforme o estado, ou um `Navigator` aninhado.
 
 ```dart
 WeaveShellRoute(

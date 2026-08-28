@@ -223,6 +223,12 @@ class WeaveContainerAdapter implements WeaveContainer {
   @override
   void disposeScope(WeaveContainer scope) {
     if (scope is! WeaveContainerAdapter) return;
+    // Escopo já descartado (por `reset()` ou por um dispose anterior) é
+    // no-op, como era na 2.0.0. Só um escopo de OUTRO pai é erro.
+    if (scope._parent == null) {
+      _scopes.remove(scope);
+      return;
+    }
     assert(
       identical(scope._parent, this),
       'disposeScope: "${scope.name}" não é escopo de "$name".',
@@ -242,13 +248,14 @@ class WeaveContainerAdapter implements WeaveContainer {
 
   @override
   void reset() {
+    // Delega a `disposeScope` para que `onDispose` dispare e os netos sejam
+    // limpos. Antes, `reset()` vazava exatamente o que `disposeScope` cuida.
+    for (final WeaveContainerAdapter scope
+        in List<WeaveContainerAdapter>.of(_scopes)) {
+      disposeScope(scope);
+    }
     _registrations.clear();
     _overrides.clear();
-    for (final scope in _scopes) {
-      scope._registrations.clear();
-      scope._overrides.clear();
-      scope._parent = null;
-    }
     _scopes.clear();
     _log('Reset');
   }

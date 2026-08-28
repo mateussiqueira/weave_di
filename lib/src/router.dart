@@ -271,23 +271,26 @@ class WeaveRouter {
 
   Route<dynamic>? _createRouteFactory(RouteSettings settings) {
     final String fullPath = settings.name ?? '/';
-    final WeaveRouteMatch? routeMatch = match(fullPath);
-
-    if (routeMatch == null) {
-      final Route<dynamic>? custom = onUnknownRoute?.call(settings);
-      if (custom != null) return custom;
-      return MaterialPageRoute<dynamic>(
-        settings: settings,
-        builder: (BuildContext context) => _defaultPage(context, fullPath),
-      );
-    }
-
-    final WeaveRoute route = routeMatch.route;
+    // Desembrulha ANTES de qualquer ramo: o envelope é detalhe interno do
+    // gate e não pode vazar para `onUnknownRoute` nem para a página.
     final List<String> chain = WeaveGateArguments.chainOf(settings.arguments);
     final Object? userArguments =
         WeaveGateArguments.unwrap(settings.arguments);
     final RouteSettings effectiveSettings =
         RouteSettings(name: settings.name, arguments: userArguments);
+
+    final WeaveRouteMatch? routeMatch = match(fullPath);
+
+    if (routeMatch == null) {
+      final Route<dynamic>? custom = onUnknownRoute?.call(effectiveSettings);
+      if (custom != null) return custom;
+      return MaterialPageRoute<dynamic>(
+        settings: effectiveSettings,
+        builder: (BuildContext context) => _defaultPage(context, fullPath),
+      );
+    }
+
+    final WeaveRoute route = routeMatch.route;
 
     final String? redirectPath = _resolveRedirect(route, routeMatch, chain);
     if (redirectPath != null) {

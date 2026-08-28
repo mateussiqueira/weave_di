@@ -173,7 +173,12 @@ Coisas que eu gostaria de adicionar (sem prometer):
 - Deep linking mais robusto
 - Analytics middleware embutido
 - Test helpers pra routing
-- Scroll-to-section em shell routes
+- **Ligar ou remover shell routes** — hoje são código morto: `WeaveShellRoute`,
+  `isShell`, `shellBuilder` e `children` não são consumidos pelo router.
+  Depreciados na 2.1.0; a 3.0.0 decide entre implementar ou remover.
+- Revisão do container na 3.0.0: bindings nomeados, `validate()` do grafo,
+  singleton eager, erros tipados e dispose por binding. Tudo isso muda a
+  interface `WeaveContainer`, e em Dart isso quebra quem usa `implements`.
 
 ---
 

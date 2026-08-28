@@ -135,11 +135,20 @@ Nenhuma quebra de API, mas o comportamento muda em cinco pontos:
    atribuir `WeaveLog.logger`.
 2. Query param **não sobrescreve mais** path param de mesmo nome.
 3. Rotas com transição customizada passam a ter `name` e `arguments`.
-4. Módulo compartilhado é instalado uma vez só, mantendo a mesma instância.
+4. Módulo compartilhado é instalado uma vez só por `install()`/`installAll()`,
+   mantendo a mesma instância. `installInto()` e `installGlobal()` continuam
+   sendo rebind destrutivo — documentado no dartdoc.
 5. Rota com guard ou middleware mostra um frame de `guardPendingBuilder`
    antes do conteúdo — `canActivateRoute` é assíncrono. Custo zero só existe
    quando o router não tem middleware global e a rota não tem guard nem
    middleware próprio.
+6. **`pushNamedRoute` e `pushReplacementNamed` lançam `ArgumentError`** quando
+   falta um `:param` — a 2.0.0 empurrava o path literal, com `:id` no lugar do
+   valor, e a tela abria quebrada. Valor vazio conta como faltando. A exceção
+   é síncrona: é erro de programação, não de runtime do usuário.
+7. **Path param passou a ser decodificado.** `/user/a%2Fb` entrega `a/b` à
+   página, alinhando com o que os query params já faziam. Quem decodificava
+   manualmente vai decodificar duas vezes.
 
 ---
 

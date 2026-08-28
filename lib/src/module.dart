@@ -62,11 +62,16 @@ class WeaveModule {
   /// Se [install] já rodou. Ver [WeaveModuleRegistry.installAll].
   bool get isInstalled => _installed;
 
+  WeaveContainer? _container;
+
   /// Container isolado deste módulo, escopo de [_parent].
   ///
   /// Criado sob demanda: um módulo declarado e nunca instalado não deve
-  /// registrar escopo nenhum no global.
-  late final WeaveContainer container = _createContainer();
+  /// registrar escopo nenhum no global. Recriado após [disposeContainer],
+  /// porque um escopo descartado perde o pai e reinstalar nele devolveria um
+  /// container órfão — que resolve os binds locais e falha em silêncio nos
+  /// do pai.
+  WeaveContainer get container => _container ??= _createContainer();
 
   WeaveContainer _createContainer() {
     final WeaveContainer effectiveParent =
@@ -118,6 +123,18 @@ class WeaveModule {
     }
 
     visit(this);
+
+    final Map<String, WeaveModule> byName = <String, WeaveModule>{};
+    for (final WeaveModule module in ordered) {
+      final WeaveModule? clash = byName[module.name];
+      if (clash != null && !identical(clash, module)) {
+        throw StateError(
+          'Dois módulos distintos com o nome "${module.name}" no mesmo grafo.',
+        );
+      }
+      byName[module.name] = module;
+    }
+
     return ordered;
   }
 
@@ -132,15 +149,22 @@ class WeaveModule {
     }
   }
 
-  void _installSelf() {
-    if (_installed) return;
+  /// Instala este módulo se ainda não estiver. Devolve `true` se instalou
+  /// agora — é o que impede `onInit` de rodar duas vezes.
+  bool _installSelf() {
+    if (_installed) return false;
     _installed = true;
     for (final WeaveBind bind in binds) {
       bind(container);
     }
+    return true;
   }
 
   /// Instala os binds em um container específico.
+  ///
+  /// **Rebind destrutivo**, ao contrário de [install]: não é idempotente e
+  /// não marca o módulo como instalado. Chamar duas vezes com o mesmo alvo
+  /// substitui os registros e descarta os singletons já criados.
   void installInto(WeaveContainer targetContainer) {
     for (final WeaveModule module in _graph()) {
       for (final WeaveBind bind in module.binds) {
@@ -153,11 +177,19 @@ class WeaveModule {
   void installGlobal() => installInto(WeaveContainerAdapter.global);
 
   /// Descarta o escopo do módulo e permite reinstalar.
+  ///
+  /// Após isto, [container] devolve um escopo novo — e não o cadáver
+  /// desligado do pai.
   void disposeContainer() {
-    if (!_installed) return;
+    final WeaveContainer? current = _container;
+    if (current == null) {
+      _installed = false;
+      return;
+    }
     final WeaveContainer effectiveParent =
         _parent ?? WeaveContainerAdapter.global;
-    effectiveParent.disposeScope(container);
+    effectiveParent.disposeScope(current);
+    _container = null;
     _installed = false;
   }
 
@@ -206,14 +238,16 @@ class WeaveModuleRegistry {
   /// inicializados.
   Future<void> installAll() async {
     for (final WeaveModule module in _resolvedOrder()) {
-      module._installSelf();
-      await module.onInit();
+      if (module._installSelf()) {
+        await module.onInit();
+      }
     }
   }
 
   /// Descarta todos, na ordem inversa da instalação.
   Future<void> disposeAll() async {
     for (final WeaveModule module in _resolvedOrder().reversed) {
+      if (!module.isInstalled) continue;
       await module.onDispose();
       module.disposeContainer();
     }
