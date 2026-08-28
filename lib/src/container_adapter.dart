@@ -49,6 +49,11 @@ class WeaveContainerAdapter implements WeaveContainer {
       WeaveLog.write('Weave:$name', message, override: _logger);
 
   void _put<T>(_Key key, _Binding<Object?> binding) {
+    assert(
+      key.$2 is! num,
+      'Nome numérico é armadilha: `1` e `1.0` são a mesma chave em Dart, e o '
+      'segundo bind substitui o primeiro em silêncio. Use String ou enum.',
+    );
     // Rebind descarta a instância anterior, mas só depois de avisá-la.
     _registrations.remove(key)?.dispose();
     _registrations[key] = binding;
@@ -139,7 +144,9 @@ class WeaveContainerAdapter implements WeaveContainer {
       _overrides[key] ?? _registrations[key];
 
   @override
-  T get<T>({Object? name}) {
+  T get<T>({Object? name}) => _resolve<T>(name, this);
+
+  T _resolve<T>(Object? name, WeaveContainerAdapter origin) {
     if (T == dynamic || T == Object) {
       throw WeaveMissingTypeArgumentError(T);
     }
@@ -157,8 +164,11 @@ class WeaveContainerAdapter implements WeaveContainer {
 
     final _Binding<Object?>? reg = _lookupLocal(key);
     if (reg == null) {
-      if (_parent != null) return _parent!.get<T>(name: name);
-      throw _notRegistered(T, name);
+      // `origin` viaja na subida para que a mensagem de erro descreva a
+      // cadeia inteira. Construir na raiz — onde o parent é nulo — perdia
+      // justamente os escopos onde estava o binding quase-certo.
+      if (_parent != null) return _parent!._resolve<T>(name, origin);
+      throw origin._notRegistered(T, name);
     }
 
     _resolutionStack.add(key);
@@ -194,32 +204,83 @@ class WeaveContainerAdapter implements WeaveContainer {
 
   @override
   T get1<T, A>(A arg, {Object? name}) {
-    final _Binding<Object?>? reg = _lookupLocal((T, name));
+    if (T == dynamic || T == Object) {
+      throw WeaveMissingTypeArgumentError(T);
+    }
+    final _Key key = (T, name);
+    final _Binding<Object?>? reg = _lookupLocal(key);
     if (reg == null && _parent != null) {
       return _parent!.get1<T, A>(arg, name: name);
     }
     if (reg == null) throw _notRegistered(T, name);
-    return reg.resolveOne(arg) as T;
+    // Mesma pilha do `get`: sem isto um ciclo por factory com argumento
+    // virava StackOverflowError em vez de erro tipado.
+    if (_resolutionStack.contains(key)) {
+      throw WeaveCircularDependencyError(<String>[
+        for (final _Key k in _resolutionStack) describeWeaveKey(k.$1, k.$2),
+        describeWeaveKey(T, name),
+      ]);
+    }
+    _resolutionStack.add(key);
+    try {
+      return reg.resolveOne(arg) as T;
+    } finally {
+      _resolutionStack.remove(key);
+    }
   }
 
   @override
   T get2<T, A, B>(A a, B b, {Object? name}) {
-    final _Binding<Object?>? reg = _lookupLocal((T, name));
+    if (T == dynamic || T == Object) {
+      throw WeaveMissingTypeArgumentError(T);
+    }
+    final _Key key = (T, name);
+    final _Binding<Object?>? reg = _lookupLocal(key);
     if (reg == null && _parent != null) {
       return _parent!.get2<T, A, B>(a, b, name: name);
     }
     if (reg == null) throw _notRegistered(T, name);
-    return reg.resolveTwo(a, b) as T;
+    // Mesma pilha do `get`: sem isto um ciclo por factory com argumento
+    // virava StackOverflowError em vez de erro tipado.
+    if (_resolutionStack.contains(key)) {
+      throw WeaveCircularDependencyError(<String>[
+        for (final _Key k in _resolutionStack) describeWeaveKey(k.$1, k.$2),
+        describeWeaveKey(T, name),
+      ]);
+    }
+    _resolutionStack.add(key);
+    try {
+      return reg.resolveTwo(a, b) as T;
+    } finally {
+      _resolutionStack.remove(key);
+    }
   }
 
   @override
   T get3<T, A, B, C>(A a, B b, C c, {Object? name}) {
-    final _Binding<Object?>? reg = _lookupLocal((T, name));
+    if (T == dynamic || T == Object) {
+      throw WeaveMissingTypeArgumentError(T);
+    }
+    final _Key key = (T, name);
+    final _Binding<Object?>? reg = _lookupLocal(key);
     if (reg == null && _parent != null) {
       return _parent!.get3<T, A, B, C>(a, b, c, name: name);
     }
     if (reg == null) throw _notRegistered(T, name);
-    return reg.resolveThree(a, b, c) as T;
+    // Mesma pilha do `get`: sem isto um ciclo por factory com argumento
+    // virava StackOverflowError em vez de erro tipado.
+    if (_resolutionStack.contains(key)) {
+      throw WeaveCircularDependencyError(<String>[
+        for (final _Key k in _resolutionStack) describeWeaveKey(k.$1, k.$2),
+        describeWeaveKey(T, name),
+      ]);
+    }
+    _resolutionStack.add(key);
+    try {
+      return reg.resolveThree(a, b, c) as T;
+    } finally {
+      _resolutionStack.remove(key);
+    }
   }
 
   @override
@@ -321,22 +382,45 @@ class WeaveContainerAdapter implements WeaveContainer {
         in List<WeaveContainerAdapter>.of(scope._scopes)) {
       scope.disposeScope(child);
     }
-    scope._onDispose?.call();
-    scope._disposeAllBindings();
+    final List<Object> errors = <Object>[];
+    try {
+      scope._onDispose?.call();
+    } catch (e) {
+      errors.add(e);
+    }
+    errors.addAll(scope._disposeAllBindings());
+    // Desmonta sempre, mesmo se algum callback lançou: escopo meio-descartado
+    // que continua resolvendo é pior que o erro.
     scope._registrations.clear();
     scope._overrides.clear();
     scope._parent = null;
     _scopes.remove(scope);
+    _reportDisposeErrors('disposeScope(${scope.name})', errors);
     _log('Disposed scope: ${scope.name}');
   }
 
-  void _disposeAllBindings() {
-    for (final _Binding<Object?> b in _registrations.values) {
-      b.dispose();
+  /// Descarta todos os bindings. Um callback que lança não impede os
+  /// demais de rodar: os erros são coletados e relançados no fim, depois de
+  /// o container já estar num estado consistente.
+  List<Object> _disposeAllBindings() {
+    final List<Object> errors = <Object>[];
+    for (final _Binding<Object?> b in <_Binding<Object?>>[
+      ..._registrations.values,
+      ..._overrides.values,
+    ]) {
+      try {
+        b.dispose();
+      } catch (e) {
+        errors.add(e);
+      }
     }
-    for (final _Binding<Object?> b in _overrides.values) {
-      b.dispose();
-    }
+    return errors;
+  }
+
+  void _reportDisposeErrors(String op, List<Object> errors) {
+    if (errors.isEmpty) return;
+    _log('$op: ${errors.length} callback(s) de dispose lançaram: '
+        '${errors.join('; ')}');
   }
 
   @override
@@ -345,39 +429,56 @@ class WeaveContainerAdapter implements WeaveContainer {
         in List<WeaveContainerAdapter>.of(_scopes)) {
       disposeScope(scope);
     }
-    _disposeAllBindings();
+    final List<Object> errors = _disposeAllBindings();
     _registrations.clear();
     _overrides.clear();
     _scopes.clear();
+    _reportDisposeErrors('reset', errors);
     _log('Reset');
   }
 
   @override
   void resetSingletons() {
-    for (final _Binding<Object?> b in _registrations.values) {
-      b.dispose();
-    }
-    for (final _Binding<Object?> b in _overrides.values) {
-      b.dispose();
-    }
+    final List<Object> errors = _disposeAllBindings();
+    // Binding doado (bindInstance / bindSingletonAsync) fica inválido: a
+    // factory dele é `() => instance` e devolveria o objeto já descartado.
+    _registrations.removeWhere((_, _Binding<Object?> b) => b.isDead);
+    _overrides.removeWhere((_, _Binding<Object?> b) => b.isDead);
+    _reportDisposeErrors('resetSingletons', errors);
     _log('Reset singletons');
   }
 
   // ── Ciclo de vida e diagnóstico ───────────────────────────────────────
 
   @override
-  WeaveValidationReport warmUp() {
+  WeaveValidationReport warmUp({bool includeScopes = true}) {
     final List<WeaveValidationIssue> issues = <WeaveValidationIssue>[];
     int checked = 0;
-    for (final MapEntry<_Key, _Binding<Object?>> e
-        in _registrations.entries.toList()) {
-      if (e.value.lifetime != _Lifetime.eager || e.value.isInitialized) {
+    final Set<_Key> keys = <_Key>{..._registrations.keys, ..._overrides.keys};
+
+    for (final _Key key in keys) {
+      final _Binding<Object?>? binding = _lookupLocal(key);
+      if (binding == null ||
+          binding.lifetime != _Lifetime.eager ||
+          binding.isInitialized) {
         continue;
       }
       checked++;
-      final WeaveValidationIssue? issue = _exercise(e.key, e.value);
+      final WeaveValidationIssue? issue = _exercise(key, binding);
       if (issue != null) issues.add(issue);
     }
+
+    // Sem descer nos escopos, um eager declarado num módulo virava lazy na
+    // prática e `checked: 0` lia-se como "não há eager", não como "não olhei".
+    if (includeScopes) {
+      for (final WeaveContainerAdapter scope
+          in List<WeaveContainerAdapter>.of(_scopes)) {
+        final WeaveValidationReport sub = scope.warmUp();
+        issues.addAll(sub.issues);
+        checked += sub.checked;
+      }
+    }
+
     _log('warmUp: $checked eager binding(s), ${issues.length} problema(s)');
     return WeaveValidationReport(issues, checked: checked);
   }
@@ -387,19 +488,44 @@ class WeaveContainerAdapter implements WeaveContainer {
     final List<WeaveValidationIssue> issues = <WeaveValidationIssue>[];
     int checked = 0;
 
-    for (final MapEntry<_Key, _Binding<Object?>> e
-        in _registrations.entries.toList()) {
-      if (!e.value.takesNoArguments) continue;
-      final bool wasInitialized = e.value.isInitialized;
+    // Snapshot ANTES do laço. Tirá-lo dentro era o bug: exercitar A cacheia
+    // B por tabela, e ao chegar em B ele já constava como pré-existente —
+    // então B nunca era descartado, contra o que a doc promete.
+    final Set<_Key> preexisting = <_Key>{
+      for (final MapEntry<_Key, _Binding<Object?>> e in _registrations.entries)
+        if (e.value.isInitialized) e.key,
+      for (final MapEntry<_Key, _Binding<Object?>> e in _overrides.entries)
+        if (e.value.isInitialized) e.key,
+    };
+
+    // Override tem precedência na resolução real, então validar só os
+    // registros dava falso negativo (override quebrado passava) e falso
+    // positivo (registro quebrado sob override bom reprovava).
+    final Set<_Key> keys = <_Key>{..._registrations.keys, ..._overrides.keys};
+
+    for (final _Key key in keys) {
+      final _Binding<Object?>? binding = _lookupLocal(key);
+      if (binding == null || !binding.takesNoArguments) continue;
       checked++;
-      final WeaveValidationIssue? issue = _exercise(e.key, e.value);
+      final WeaveValidationIssue? issue = _exercise(key, binding);
       if (issue != null) issues.add(issue);
-      // Não deixa rastro: o que não existia antes é descartado.
-      if (!wasInitialized) e.value.dispose();
     }
 
+    for (final _Key key in keys) {
+      if (preexisting.contains(key)) continue;
+      try {
+        _lookupLocal(key)?.dispose();
+      } catch (_) {
+        // Descarte de instância criada pela própria validação não deve
+        // mascarar o relatório.
+      }
+    }
+    _registrations.removeWhere((_, _Binding<Object?> b) => b.isDead);
+    _overrides.removeWhere((_, _Binding<Object?> b) => b.isDead);
+
     if (includeScopes) {
-      for (final WeaveContainerAdapter scope in _scopes) {
+      for (final WeaveContainerAdapter scope
+          in List<WeaveContainerAdapter>.of(_scopes)) {
         final WeaveValidationReport sub = scope.validate();
         issues.addAll(sub.issues);
         checked += sub.checked;
@@ -409,6 +535,10 @@ class WeaveContainerAdapter implements WeaveContainer {
   }
 
   WeaveValidationIssue? _exercise(_Key key, _Binding<Object?> binding) {
+    // Empurra a chave antes de resolver: `resolveZero` é chamado direto, sem
+    // passar por `get`, então sem isto a factory rodava uma volta a mais e a
+    // cadeia do ciclo saía rotacionada.
+    final bool pushed = _resolutionStack.add(key);
     try {
       binding.resolveZero();
       return null;
@@ -439,6 +569,8 @@ class WeaveContainerAdapter implements WeaveContainer {
         error: e,
         stackTrace: s,
       );
+    } finally {
+      if (pushed) _resolutionStack.remove(key);
     }
   }
 
@@ -533,6 +665,11 @@ class _Binding<T> {
 
   T? _instance;
   bool _initialized = false;
+  bool _seeded = false;
+  bool _dead = false;
+
+  /// Binding doado cujo objeto já foi descartado — não pode reentregar.
+  bool get isDead => _dead;
 
   bool get takesNoArguments => _factory0 != null;
   bool get isInitialized => _initialized;
@@ -542,9 +679,17 @@ class _Binding<T> {
   void seed(T instance) {
     _instance = instance;
     _initialized = true;
+    _seeded = true;
   }
 
   dynamic resolveZero() {
+    if (_dead) {
+      throw StateError(
+        'Este binding recebeu uma instância pronta (bindInstance ou '
+        'bindSingletonAsync) que já foi descartada. Registre outra antes de '
+        'resolver — o container não sabe reconstruir um objeto doado.',
+      );
+    }
     if (!_caches) return (_factory0! as WeaveFactory<T>)();
     if (!_initialized) {
       _instance = (_factory0! as WeaveFactory<T>)();
@@ -564,11 +709,20 @@ class _Binding<T> {
       _factory3!(a, b, c);
 
   /// Descarta a instância cacheada, avisando o callback de dispose.
+  ///
+  /// O estado é zerado **antes** de notificar: se o callback do usuário
+  /// lançar, o binding já está limpo e não relança para sempre. O erro sobe
+  /// para quem chamou decidir — os laços de teardown agregam.
   void dispose() {
-    if (_initialized && _instance is T) {
-      _dispose?.call(_instance as T);
-    }
+    if (!_initialized) return;
+    final T? victim = _instance;
     _instance = null;
     _initialized = false;
+    if (_seeded) {
+      // Instância doada por bindInstance/bindSingletonAsync: a factory é
+      // `() => instance` e devolveria o cadáver no próximo get. Invalida.
+      _dead = true;
+    }
+    if (victim is T) _dispose?.call(victim);
   }
 }

@@ -7,6 +7,59 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [3.0.1] - 2026-08-28
+
+Correções encontradas por auditoria adversarial sobre a própria 3.0.0. Duas
+delas eram bloqueantes: **não use a 3.0.0**.
+
+### Corrigido
+
+- **Callback de `dispose` que lançava travava o container para sempre.**
+  `_Binding.dispose()` notificava o callback **antes** de zerar o estado, e os
+  laços de teardown não tinham `try/catch`. Um `close()` que lança — socket já
+  fechado, `StreamController` fechado, plugin nativo no teardown — matava tudo
+  que vinha depois: com cinco singletons e o terceiro lançando, três recursos
+  vazavam e o `reset` relançava para sempre. Agora o estado é zerado antes de
+  notificar, os erros são agregados e reportados no log, e o desmonte acontece
+  de qualquer jeito. Escopo meio-descartado que continua resolvendo é pior que
+  o erro.
+- **`resetSingletons()` reentregava a instância que acabou de descartar.**
+  Binding semeado por `bindInstance` ou `bindSingletonAsync` guarda
+  `() => instance` como factory: descartar e manter o registro fazia o próximo
+  `get` devolver o objeto morto. Agora o binding doado é invalidado no
+  descarte, e resolver depois disso lança com instrução clara — o container
+  não sabe reconstruir um objeto que recebeu pronto.
+- **`validate()` deixava rastro.** O snapshot de "o que já estava
+  instanciado" era tirado dentro do laço, então exercitar A cacheava B por
+  tabela e, ao chegar em B, ele já constava como pré-existente — ficava vivo e
+  sem `dispose`. O snapshot passou para antes do laço. Contradizia
+  literalmente a doc do método.
+- **`validate()` e `warmUp()` ignoravam `_overrides`.** Iteravam
+  `_registrations` enquanto a resolução real usa `_overrides[key] ?? …`.
+  Errava nas duas direções: override quebrado passava, e registro quebrado sob
+  override bom reprovava — além de construir o objeto real por baixo do fake.
+- **Ciclo em factory com argumento virava `StackOverflowError`.**
+  `get1/get2/get3` ganharam `name` na 3.0.0 mas não entraram na pilha de
+  resolução. Agora detectam ciclo como o `get`, e ganharam o mesmo guarda de
+  argumento de tipo ausente.
+- **`WeaveNotRegisteredError` era sempre construído na raiz**, então a
+  mensagem listava só o container global e nenhum dos bindings vizinhos. Como
+  `WeaveModule.container` é sempre um escopo, esse era o caminho padrão — e
+  matava justamente o diagnóstico do erro que a 3.0.0 criou: o typo em `name`.
+  O container de origem agora viaja na subida.
+- **`warmUp()` não descia em escopos**, então eager declarado num módulo
+  virava lazy na prática e `checked: 0` lia-se como "não há eager" em vez de
+  "não olhei aí".
+- **Nome numérico é rejeitado em debug.** `name: 1` e `name: 1.0` são a mesma
+  chave em Dart, e o segundo bind substituía o primeiro em silêncio.
+
+### Nota sobre a 3.0.0
+
+Ela chegou a ser tagueada e enviada. A tag `v3.0.0` **não foi movida** — mover
+tag publicada é o tipo de coisa que queima quem confia nela. Use `v3.0.1`.
+
+---
+
 ## [3.0.0] - 2026-08-28
 
 **Mudança de licença.** Da 3.0.0 em diante este software é **proprietário**.

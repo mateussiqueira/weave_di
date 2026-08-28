@@ -163,7 +163,7 @@ abstract class WeaveContainer {
   ///
   /// Idempotente. Falha de uma factory não interrompe as outras: todas são
   /// tentadas e os problemas voltam agregados no relatório.
-  WeaveValidationReport warmUp();
+  WeaveValidationReport warmUp({bool includeScopes = true});
 
   /// Tenta resolver todo binding sem argumentos e relata o que falhou.
   ///
