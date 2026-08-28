@@ -34,3 +34,6 @@ Thumbs.db
 
 # Test
 .test_coverage.dart
+
+# Instruções de acesso — interno, não versionar
+ACESSO-CI.md
