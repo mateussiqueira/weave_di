@@ -319,7 +319,7 @@ class WeaveRoute {
   const WeaveRoute({
     required this.path,
     this.name,
-    required this.builder,
+    this.builder = _needsInjectFactory,
     this.guards = const [],
     this.middlewares = const [],
     this.transition = WeaveTransition.material,
@@ -329,7 +329,23 @@ class WeaveRoute {
     this.layoutBuilder,
     this.when,
     this.skipGuards = false,
-  });
+  }) : assert(
+         !identical(builder, _needsInjectFactory) || injectFactory != null,
+         'WeaveRoute precisa de `builder` ou de `injectFactory`.',
+       );
+
+  /// Sentinela do [builder] ausente.
+  ///
+  /// Existe para que uma rota que usa [injectFactory] não precise declarar um
+  /// `builder` morto só para satisfazer um parâmetro obrigatório — era ruído
+  /// numa linha por rota. Não vira campo nulável porque isso quebraria quem lê
+  /// `route.builder` e chama direto.
+  static Widget _needsInjectFactory(BuildContext context, WeaveParams params) {
+    throw StateError(
+      'Esta rota não declara `builder`. Ela deveria ser construída pelo '
+      '`injectFactory`, e o router chamou o builder — é bug do Weave, não seu.',
+    );
+  }
 
   /// Cria uma shell route (mantém layout pai enquanto navega filhos).
   /// Cópia com valores sobrescritos.

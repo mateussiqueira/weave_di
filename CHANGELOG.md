@@ -7,6 +7,40 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [3.2.0] - 2026-08-29
+
+### Alterado
+
+- **`WeaveRoute.builder` deixou de ser obrigatório** quando a rota declara
+  `injectFactory`.
+
+  `buildPage` sempre deu precedência ao `injectFactory`, mas `builder` era
+  `required` — então toda rota que usava injeção precisava declarar um builder
+  morto, que nunca rodava, só para satisfazer o construtor. Uma linha de ruído
+  por rota, e o app de referência ia ganhar 23 delas.
+
+  ```dart
+  // antes: o builder existia só para o compilador aceitar
+  WeaveRoute(
+    path: '/reseller',
+    builder: (_, _) => const SizedBox(),
+    injectFactory: (context, params, c) => makeResellerPage(c),
+  )
+
+  // agora
+  WeaveRoute(
+    path: '/reseller',
+    injectFactory: (context, params, c) => makeResellerPage(c),
+  )
+  ```
+
+  **Não é breaking.** O campo continua não-nulável — torná-lo nulável quebraria
+  quem lê `route.builder` e chama direto. Em vez disso o default é uma
+  sentinela, e um `assert` no construtor exige que pelo menos um dos dois
+  exista. Rota sem nenhum dos dois falha em debug, não em produção.
+
+---
+
 ## [3.1.0] - 2026-08-28
 
 ### Adicionado

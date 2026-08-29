@@ -3,7 +3,7 @@ description: >-
   Dependency injection and typed routing for Flutter in one package.
   Scopes, parameterized factories, circular-dependency detection,
   route guards, middleware and transitions. No code generation.
-version: 3.1.0
+version: 3.2.0
 repository: https://github.com/mateussiqueira/weave_di
 homepage: https://github.com/mateussiqueira/weave_di
 issue_tracker: https://github.com/mateussiqueira/weave_di/issues
