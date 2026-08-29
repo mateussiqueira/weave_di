@@ -5,8 +5,6 @@
 
 > Um framework de DI + rotas pra Flutter que eu criei porque estava cansado de boilerplate.
 
-[![pub package](https://img.shields.io/pub/v/weave_di.svg)](https://pub.dev/packages/weave_di)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## Por que Weave?
 
@@ -20,14 +18,15 @@ Weave resolve isso com uma abordagem simples: **um container de DI enxuto** + **
 
 ## Instalação
 
-Via git, fixando uma tag — sempre uma tag, nunca a branch, senão a dependência
-flutua e um push no `main` muda o build de todo mundo:
+Repositório **privado**, consumido por SSH com deploy key. Sempre por tag,
+nunca pela branch — senão a dependência flutua e um push no `main` muda o
+build de todo mundo, sem aviso.
 
 ```yaml
 dependencies:
   weave_di:
     git:
-      url: https://github.com/mateussiqueira/weave_di.git
+      url: git@weave-di.github.com:mateussiqueira/weave_di.git
       ref: v3.2.0
 ```
 
