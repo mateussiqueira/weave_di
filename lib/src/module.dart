@@ -46,7 +46,9 @@ class WeaveModule {
     // Parâmetro nomeado não pode começar com `_`.
     // ignore: prefer_initializing_formals
   })  : _parent = parent,
+        // ignore: prefer_initializing_formals
         _onInit = onInit,
+        // ignore: prefer_initializing_formals
         _onDispose = onDispose;
 
   /// Nome do módulo para identificação.
