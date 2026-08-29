@@ -7,6 +7,36 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [3.3.0] - 2026-08-29
+
+### Adicionado
+
+- **`onInit` e `onDispose` pelo construtor do `WeaveModule`.**
+
+  Os dois já existiam, mas só como métodos para sobrescrever — o que exige
+  declarar o módulo como subclasse. Módulo declarado como função fábrica, que
+  é a forma mais direta e a que o app de referência usa nos dezessete, não
+  tinha como ter lifecycle. Na prática isso empurrava toda inicialização
+  assíncrona para o `main`, que passava a conhecer o miolo de cada feature.
+
+  ```dart
+  WeaveModule(
+    name: 'auth',
+    binds: [...],
+    onInit: (c) => c.get<AuthPresenter>().loadStoredUser(),
+  )
+  ```
+
+  `onInit` roda depois dos binds do módulo e dos imports dele — o ponto em que
+  o grafo está completo — e uma vez só, mesmo com `installAll` repetido. A
+  ordem topológica vale: import inicializa antes de quem importa.
+
+  **Não é breaking.** Quem declara o módulo como subclasse e sobrescreve
+  continua funcionando; a sobrescrita substitui o callback do construtor, e
+  `super.onInit()` mantém os dois.
+
+---
+
 ## [3.2.0] - 2026-08-29
 
 ### Alterado

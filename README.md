@@ -27,7 +27,7 @@ dependencies:
   weave_di:
     git:
       url: git@weave-di.github.com:mateussiqueira/weave_di.git
-      ref: v3.2.0
+      ref: v3.3.0
 ```
 
 Depois é só rodar:

@@ -41,9 +41,13 @@ class WeaveModule {
     this.imports = const <WeaveModule>[],
     this.exports = const <WeaveExport<Object?>>[],
     WeaveContainer? parent,
+    Future<void> Function(WeaveContainer container)? onInit,
+    Future<void> Function(WeaveContainer container)? onDispose,
     // Parâmetro nomeado não pode começar com `_`.
     // ignore: prefer_initializing_formals
-  }) : _parent = parent;
+  })  : _parent = parent,
+        _onInit = onInit,
+        _onDispose = onDispose;
 
   /// Nome do módulo para identificação.
   final String name;
@@ -64,6 +68,8 @@ class WeaveModule {
   final List<WeaveExport<Object?>> exports;
 
   final WeaveContainer? _parent;
+  final Future<void> Function(WeaveContainer container)? _onInit;
+  final Future<void> Function(WeaveContainer container)? _onDispose;
 
   bool _installed = false;
 
@@ -90,11 +96,31 @@ class WeaveModule {
     return effectiveParent.createScope();
   }
 
-  /// Lifecycle: chamado após todos os imports serem instalados.
-  Future<void> onInit() async {}
+  /// Chamado por [WeaveModuleRegistry.installAll] depois que o módulo e os
+  /// imports dele foram instalados — o ponto em que o grafo está completo.
+  ///
+  /// É onde mora a inicialização assíncrona da feature: carregar a sessão
+  /// salva, aplicar o idioma escolhido, abrir um banco. Sem isso, esse
+  /// trabalho fica no `main`, que passa a conhecer o miolo de cada módulo.
+  ///
+  /// Pode vir pelo construtor, para módulo declarado como função fábrica:
+  ///
+  /// ```dart
+  /// WeaveModule(
+  ///   name: 'auth',
+  ///   binds: [...],
+  ///   onInit: (c) => c.get<AuthPresenter>().loadStoredUser(),
+  /// )
+  /// ```
+  ///
+  /// Ou por sobrescrita, para módulo declarado como subclasse. Sobrescrever
+  /// substitui o callback do construtor — chame `super.onInit()` para manter
+  /// os dois.
+  Future<void> onInit() async => _onInit?.call(container);
 
-  /// Lifecycle: chamado quando o módulo é descartado.
-  Future<void> onDispose() async {}
+  /// Chamado por [WeaveModuleRegistry.disposeAll], antes do escopo do módulo
+  /// ser descartado. Ver [onInit] quanto à forma.
+  Future<void> onDispose() async => _onDispose?.call(container);
 
   /// Todas as rotas, incluindo as dos imports, sem duplicar módulo.
   List<WeaveRoute> get allRoutes {
