@@ -7,6 +7,19 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [3.4.0] - 2026-09-08
+
+**Mudança de licença: de volta para MIT.** A 3.0.0 tinha fechado o pacote, e
+esta versão reabre. O motivo é o mesmo que fechou, invertido: o pacote é
+dependência de um framework que agora é aberto, e uma peça proprietária no
+meio de uma cadeia MIT é um obstáculo para quem quiser contribuir com
+qualquer uma das duas.
+
+Nada no código mudou nesta versão. `LICENSE` passa a ser a MIT, com o
+copyright de Mateus Siqueira.
+
+---
+
 ## [3.3.0] - 2026-08-29
 
 ### Adicionado

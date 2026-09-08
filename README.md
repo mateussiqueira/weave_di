@@ -1,7 +1,11 @@
 # Weave
 
-> **Software proprietário.** Copyright (c) 2026 Mateus Siqueira.
-> Ver `LICENSE` — versões até a 2.2.0 foram MIT; da 3.0.0 em diante, não.
+[![pub package](https://img.shields.io/pub/v/weave_di.svg)](https://pub.dev/packages/weave_di)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+> MIT. Copyright (c) 2026 Mateus Siqueira. A 3.0.0 e a 3.1.0 chegaram a sair
+> como proprietárias; da 3.4.0 em diante o pacote volta a ser MIT, e é assim
+> que ele fica.
 
 > Um framework de DI + rotas pra Flutter que eu criei porque estava cansado de boilerplate.
 

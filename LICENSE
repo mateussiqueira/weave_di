@@ -1,82 +1,21 @@
-PROPRIETARY SOFTWARE LICENSE
-LICENÇA DE SOFTWARE PROPRIETÁRIO
+MIT License
 
-Copyright (c) 2026 Mateus Siqueira. All rights reserved.
-Copyright (c) 2026 Mateus Siqueira. Todos os direitos reservados.
+Copyright (c) 2026 Mateus Siqueira
 
-================================================================================
-ENGLISH
-================================================================================
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-This software and its source code are proprietary and confidential.
-
-No license, right or interest is granted by this file. In particular, and
-without limitation, no permission is granted to use, copy, modify, merge,
-publish, distribute, sublicense or sell this software, in whole or in part,
-except under a separate written agreement signed by the copyright holder.
-
-Access to this repository does not by itself grant any license. Receiving a
-copy of this software — by clone, download, package manager, continuous
-integration credential, deploy key, or any other means — does not grant any
-right to use it beyond what a signed agreement expressly provides.
-
-VERSION HISTORY AND PRIOR LICENSING
-
-Versions up to and including 2.2.0 were released under the MIT License, with
-the copyright notice "Copyright (c) 2026 Digital Core". That grant, for those
-versions, is not revoked by this file and cannot be revoked retroactively.
-Anyone who obtained a copy of version 2.2.0 or earlier holds whatever rights
-the MIT License granted them for that copy.
-
-This license applies to version 3.0.0 and to every version released after it.
-
-WARRANTY
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-================================================================================
-PORTUGUÊS
-================================================================================
-
-Este software e seu código-fonte são proprietários e confidenciais.
-
-Nenhuma licença, direito ou interesse é concedido por este arquivo. Em
-particular, e sem limitação, não se concede permissão para usar, copiar,
-modificar, fundir, publicar, distribuir, sublicenciar ou vender este software,
-no todo ou em parte, exceto mediante acordo escrito em separado, assinado pelo
-titular dos direitos autorais.
-
-O acesso a este repositório não concede, por si só, licença alguma. Receber uma
-cópia deste software — por clone, download, gerenciador de pacotes, credencial
-de integração contínua, deploy key ou qualquer outro meio — não concede
-qualquer direito de uso além do que um acordo assinado expressamente previr.
-
-HISTÓRICO DE VERSÕES E LICENCIAMENTO ANTERIOR
-
-As versões até a 2.2.0, inclusive, foram distribuídas sob a Licença MIT, com o
-aviso de copyright "Copyright (c) 2026 Digital Core". Aquela concessão, para
-aquelas versões, não é revogada por este arquivo e não pode ser revogada
-retroativamente. Quem obteve cópia da versão 2.2.0 ou anterior detém os
-direitos que a Licença MIT lhe concedeu sobre aquela cópia.
-
-Esta licença se aplica à versão 3.0.0 e a toda versão publicada após ela.
-
-GARANTIA
-
-O SOFTWARE É FORNECIDO "COMO ESTÁ", SEM GARANTIA DE QUALQUER NATUREZA, EXPRESSA
-OU IMPLÍCITA, INCLUINDO MAS NÃO SE LIMITANDO ÀS GARANTIAS DE COMERCIABILIDADE,
-ADEQUAÇÃO A UMA FINALIDADE ESPECÍFICA E NÃO VIOLAÇÃO. EM NENHUMA HIPÓTESE O
-TITULAR DOS DIREITOS AUTORAIS SERÁ RESPONSÁVEL POR QUALQUER REIVINDICAÇÃO,
-DANO OU OUTRA RESPONSABILIDADE, SEJA EM AÇÃO CONTRATUAL, EXTRACONTRATUAL OU DE
-OUTRA NATUREZA, DECORRENTE DE, OU EM CONEXÃO COM, O SOFTWARE OU O USO OU OUTRAS
-NEGOCIAÇÕES COM O SOFTWARE.
-
-================================================================================
-
-Contato para licenciamento / Licensing enquiries:
-Mateus Siqueira — mateus.siqueira@ayzen.one
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
