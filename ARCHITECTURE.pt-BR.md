@@ -165,7 +165,8 @@ WeaveRoute(
 
 ## O que não está no escopo
 
-- **State management** — Weave é DI + rotas, não Redux/BLoC/Riverpod
+- **Gerência de estado** — Weave é DI + rotas, e nada mais. Ele não guarda
+  estado de aplicação e não quer guardar
 - **Injeção automática** — eu prefério explícito sobre implícito
 - **Code generation** — sem build_runner, sem annotations mágicas
 - **Hot reload avançado** — isso é responsabilidade do Flutter

@@ -190,7 +190,8 @@ WeaveRoute(
 
 ## Out of scope
 
-- **State management** — Weave is DI + routing, not Redux/BLoC/Riverpod
+- **State management** — Weave is DI + routing, and nothing else. It does
+  not hold application state and does not want to
 - **Automatic injection** — I prefer explicit over implicit
 - **Code generation** — no build_runner, no magic annotations
 - **Advanced hot reload** — that is Flutter's responsibility
