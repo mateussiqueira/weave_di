@@ -1,65 +1,58 @@
+**English** · [Português](README.pt-BR.md)
+
 # Weave
 
 [![pub package](https://img.shields.io/pub/v/weave_di.svg)](https://pub.dev/packages/weave_di)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-> MIT. Copyright (c) 2026 Mateus Siqueira. A 3.0.0 e a 3.1.0 chegaram a sair
-> como proprietárias; da 3.4.0 em diante o pacote volta a ser MIT, e é assim
-> que ele fica.
+> A DI + routing framework for Flutter, written because I was tired of
+> boilerplate.
 
-> Um framework de DI + rotas pra Flutter que eu criei porque estava cansado de boilerplate.
+MIT. Copyright (c) 2026 Mateus Siqueira. Versions 3.0.0 through 3.3.0 went out
+as proprietary; from 3.4.0 onwards the package is MIT again, and that is how it
+stays.
 
+## Why Weave?
 
-## Por que Weave?
+I started this because every Flutter app I worked on had the same problem:
 
-Eu comecei esse projeto porque todo app Flutter que eu trabalhava tinha o mesmo problema:
+- DI containers either overcomplicated or too simple
+- Navigation scattered everywhere
+- Modules that felt like a mess
 
-- Containers de DI super complexos ou muito simples
-- Navegação espalhada por toda parte
-- Módulos que pareciam uma bagunça
+Weave solves that with a simple approach: **a lean DI container** + **a typed
+routing system** + **modules with a lifecycle**. No magic, no excessive
+boilerplate.
 
-Weave resolve isso com uma abordagem simples: **um container de DI enxuto** + **um sistema de rotas tipado** + **módulos com lifecycle**. Sem magia, sem boilerplate excessivo.
-
-## Instalação
-
-Repositório **privado**, consumido por SSH com deploy key. Sempre por tag,
-nunca pela branch — senão a dependência flutua e um push no `main` muda o
-build de todo mundo, sem aviso.
+## Installation
 
 ```yaml
 dependencies:
-  weave_di:
-    git:
-      url: git@weave-di.github.com:mateussiqueira/weave_di.git
-      ref: v3.3.0
+  weave_di: ^3.4.0
 ```
-
-Depois é só rodar:
 
 ```bash
 flutter pub get
 ```
 
-Para atualizar, troque a tag e rode `flutter pub upgrade weave_di`.
+## Quick start
 
-## Quick Start
-
-### 1. Configurando o Container
+### 1. Setting up the container
 
 ```dart
 import 'package:weave_di/weave_di.dart';
 
-// O container global já vem pronto
+// The global container is ready to use
 WeaveContainerAdapter.global.bindSingleton<AuthService>(
   () => AuthServiceImpl(),
 );
 
-// Ou cria um isolado pra um módulo
+// Or create an isolated one for a module
 final container = WeaveContainerAdapter.create(name: 'auth');
 container.bindSingleton<UserService>(() => UserServiceImpl());
 ```
 
-### 2. Definindo Rotas
+### 2. Defining routes
 
 ```dart
 final appRouter = WeaveRouter(
@@ -76,7 +69,7 @@ final appRouter = WeaveRouter(
         userId: params.getInt('id'),
       ),
     ),
-    // Query params funcionam também
+    // Query params work too
     WeaveRoute(
       path: '/search',
       builder: (context, params) => SearchPage(
@@ -88,7 +81,7 @@ final appRouter = WeaveRouter(
 );
 ```
 
-### 3. Conectando no MaterialApp
+### 3. Wiring it into MaterialApp
 
 ```dart
 MaterialApp(
@@ -98,34 +91,34 @@ MaterialApp(
 );
 ```
 
-> Use `initialRoute` com `/` registrada no router, **não** `home:`. O widget
-> passado em `home:` não passa por `onGenerateRoute`, e portanto escapa de
-> guards, middlewares e redirects.
+> Use `initialRoute` with `/` registered in the router, **not** `home:`. The
+> widget passed to `home:` does not go through `onGenerateRoute`, and
+> therefore escapes guards, middlewares and redirects.
 >
-> `onGenerateInitialRoutes` também importa: sem ele, um deep link `/user/42`
-> é quebrado pelo Flutter em `/`, `/user` e `/user/42`, e os três viram
-> páginas empilhadas.
+> `onGenerateInitialRoutes` matters as well: without it, a deep link to
+> `/user/42` is split by Flutter into `/`, `/user` and `/user/42`, and all
+> three become stacked pages.
 
-## Funcionalidades
+## Features
 
-### Dependency Injection
+### Dependency injection
 
 ```dart
 final c = WeaveContainerAdapter(name: 'my-app');
 
-// Singleton — uma instância só
+// Singleton — one instance only
 c.bindSingleton<AuthService>(() => AuthServiceImpl());
 
-// Transient — nova instância a cada chamada
+// Transient — a new instance on every call
 c.bind<UserRepository>(() => UserRepositoryImpl());
 
-// Lazy — criada só quando você pedir
+// Lazy — created only when you ask
 c.bindLazy<CacheService>(() => CacheServiceImpl());
 
-// Instance — valor que já existe
+// Instance — a value that already exists
 c.bindInstance<Config>(appConfig);
 
-// Factory com parâmetros (1 a 3 params)
+// Factory with parameters (1 to 3)
 c.bindFactory<UserRepository, Database>(
   (db) => UserRepositoryImpl(db: db),
 );
@@ -134,59 +127,59 @@ final repo = c.get1<UserRepository, Database>(database);
 // Async singleton
 await c.bindSingletonAsync<Config>(() async => await loadConfig());
 
-// Resolvendo
+// Resolving
 final auth = c.get<AuthService>();
 final repo = c.get1<UserRepository, Database>(db);
 
-// Override pra testes
+// Override for tests
 c.overrideFactory<AuthService>(() => MockAuthService());
 ```
 
-### Scoped Bindings
+### Scoped bindings
 
 ```dart
 final scope = c.createScope(onDispose: () {
-  // Cleanup quando o scope for descartado
+  // Cleanup when the scope is discarded
 });
 
 scope.bindSingleton<RequestContext>(() => RequestContext());
-scope.get<RequestContext>(); // Funciona
+scope.get<RequestContext>(); // works
 
 c.disposeScope(scope);
 // scope.get<RequestContext>(); // Error
 ```
 
-### Detecção de Dependências Circulares
+### Circular dependency detection
 
-O Weave detecta automaticamente dependências circulares e lança um `StateError`:
+Weave detects circular dependencies automatically and throws a `StateError`:
 
 ```dart
-c.bindLazy<String>(() => 'Depende de int: ${c.get<int>()}');
+c.bindLazy<String>(() => 'Depends on int: ${c.get<int>()}');
 c.bindLazy<int>(() => c.get<String>().length);
 
 c.get<String>(); // StateError: Circular dependency detected: String -> int -> String
 ```
 
-### Rotas Tipadas
+### Typed routes
 
 ```dart
 WeaveRoute(
   path: '/user/:id',
   builder: (context, params) {
-    final id = params.getInt('id');        // tipo-safe
+    final id = params.getInt('id');        // type-safe
     final name = params.getString('name');
     final active = params.getBool('active');
-    final tags = params.getList('tags');    // separado por vírgula
+    final tags = params.getList('tags');    // comma-separated
     final date = params.getDateTime('date');
     return UserPage(id: id);
   },
 );
 ```
 
-### Guards de Autorização
+### Authorisation guards
 
 ```dart
-// Guard customizado
+// Custom guard
 final authGuard = WeaveGuard.custom(
   canActivate: (context, route, params, matchedRoutes) async {
     final auth = context.get<AuthService>();
@@ -194,17 +187,17 @@ final authGuard = WeaveGuard.custom(
   },
 );
 
-// Guard de autenticação embutido
+// Built-in authentication guard
 final authGuard = WeaveGuard.auth(
   isAuthenticated: (context) => context.get<AuthService>().isAuthenticated,
   loginPath: '/login',
 );
 
-// Sempre permitir/bloquear
+// Always allow / always deny
 WeaveGuard.allow();
 WeaveGuard.deny();
 
-// Aplicando à rota
+// Applying it to a route
 WeaveRoute(
   path: '/admin',
   builder: (_, _) => const AdminPage(),
@@ -212,10 +205,11 @@ WeaveRoute(
 );
 ```
 
-Desde a 2.1.0 os guards rodam **também** em `onGenerateRoute` — antes só a
-navegação programática os respeitava, e deep link entrava direto em rota
-protegida. Enquanto o guard decide, a rota mostra `guardPendingBuilder`; se
-negar sem ter para onde voltar, mostra `guardBlockedBuilder`.
+Since 2.1.0 guards run **in `onGenerateRoute` as well** — before that, only
+programmatic navigation respected them, and a deep link walked straight into a
+protected route. While the guard decides, the route shows
+`guardPendingBuilder`; if it denies with nowhere to go back to, it shows
+`guardBlockedBuilder`.
 
 ```dart
 WeaveRouter(
@@ -224,16 +218,16 @@ WeaveRouter(
     child: CircularProgressIndicator(),
   )),
   guardBlockedBuilder: (_) => const Scaffold(body: Center(
-    child: Text('Acesso negado'),
+    child: Text('Access denied'),
   )),
 );
 ```
 
-#### Redirect a partir de um guard
+#### Redirecting from a guard
 
-Um guard não deve mexer no `Navigator` por conta própria: durante o `await`
-o topo da pilha pode não ser mais a rota dele. Implemente
-`WeaveRedirectingGuard` e devolva a decisão:
+A guard should not touch the `Navigator` on its own: during the `await`, the
+top of the stack may no longer be its route. Implement
+`WeaveRedirectingGuard` and return the decision:
 
 ```dart
 class AuthGuard implements WeaveRedirectingGuard {
@@ -247,8 +241,8 @@ class AuthGuard implements WeaveRedirectingGuard {
 }
 ```
 
-Marque o destino com `skipGuards: true`, senão um middleware **global**
-embrulha o próprio `/login` e o redirect vira laço:
+Mark the destination with `skipGuards: true`, otherwise a **global** middleware
+wraps `/login` itself and the redirect becomes a loop:
 
 ```dart
 WeaveRoute(path: '/login', skipGuards: true, builder: (_, _) => LoginPage());
@@ -257,7 +251,7 @@ WeaveRoute(path: '/login', skipGuards: true, builder: (_, _) => LoginPage());
 ### Middleware
 
 ```dart
-// Middleware de log
+// Logging middleware
 WeaveRouter(
   routes: [...],
   middlewares: [
@@ -265,11 +259,11 @@ WeaveRouter(
   ],
 );
 
-// Middleware customizado
+// Custom middleware
 WeaveMiddleware.onNavigateAction(
   action: (context, path, params) async {
     analytics.trackNavigation(path);
-    return true; // permite navegação
+    return true; // allows navigation
   },
 );
 ```
@@ -280,73 +274,74 @@ WeaveMiddleware.onNavigateAction(
 WeaveRoute(
   path: '/old-page',
   redirect: (context, params) => '/new-page',
-  builder: (_, _) => const SizedBox(), // nunca chega aqui
+  builder: (_, _) => const SizedBox(), // never reached
 );
 ```
 
-### Rotas Aninhadas
+### Nested routes
 
-O `children` declara a árvore com path **relativo**; o router a achata em
-paths absolutos na construção. Casamento, params e query usam o mesmo
-mecanismo das rotas planas.
+`children` declares the tree with a **relative** path; the router flattens it
+into absolute paths at construction. Matching, params and query use the same
+mechanism as flat routes.
 
 ```dart
 WeaveRoute(
-  path: '/estabelecimentos',
-  name: 'lojas',
+  path: '/stores',
+  name: 'stores',
   builder: (_, _) => const StoreListPage(),
   children: [
     WeaveRoute(
       path: '/:slug',
-      name: 'loja',
+      name: 'store',
       layoutBuilder: (context, child) => StoreShell(child: child),
       builder: (_, p) => StorePage(slug: p.getString('slug')),
       children: [
-        WeaveRoute(path: '/categorias/:cat', builder: ...),
-        WeaveRoute(path: '/produtos/:id',    builder: ...),
+        WeaveRoute(path: '/categories/:cat', builder: ...),
+        WeaveRoute(path: '/products/:id',    builder: ...),
       ],
     ),
   ],
 );
-// vira /estabelecimentos, /estabelecimentos/:slug,
-//      /estabelecimentos/:slug/categorias/:cat,
-//      /estabelecimentos/:slug/produtos/:id
+// becomes /stores, /stores/:slug,
+//         /stores/:slug/categories/:cat,
+//         /stores/:slug/products/:id
 ```
 
-O filho **herda guards e middlewares** dos ancestrais: proteger
-`/estabelecimentos` protege a subárvore inteira. Um módulo pode declarar a
-própria subárvore e ser dono dela.
+A child **inherits guards and middlewares** from its ancestors: protecting
+`/stores` protects the whole subtree. A module can declare its own subtree and
+own it.
 
-**`layoutBuilder`** envolve a rota e toda a subárvore dela — é o cabeçalho da
-loja que permanece enquanto se navega entre categorias e produtos. É
-composição de widget, não Navigator aninhado: a pilha continua sendo uma só e
-o layout é reconstruído a cada rota.
+**`layoutBuilder`** wraps the route and its entire subtree — it is the store's
+header that stays while you navigate between categories and products. It is
+widget composition, not a nested Navigator: the stack is still one, and the
+layout is rebuilt on each route.
 
-**Breadcrumb** sai de `match.ancestors`, sem cirurgia de string:
+**Breadcrumbs** come out of `match.ancestors`, with no string surgery:
 
 ```dart
-final match = router.match('/estabelecimentos/ze/produtos/42')!;
-match.ancestors.map((r) => r.name);   // ['lojas', 'loja']
+final match = router.match('/stores/joe/products/42')!;
+match.ancestors.map((r) => r.name);   // ['stores', 'store']
 ```
 
-### Deep link em hierarquia (web e apps modulares)
+### Deep links into a hierarchy (web and modular apps)
 
-Entrar direto em `/cadernos/7/gabarito` — por URL na web, por push
-notification, ou pelo botão voltar do browser — normalmente cria **uma** rota
-só, e o voltar fecha o app. Com `stackAncestorsOnDeepLink` a pilha é montada
-inteira:
+Landing directly on `/notebooks/7/answers` — by URL on the web, by push
+notification, or through the browser's back button — normally creates **one**
+route, and back closes the app. With `stackAncestorsOnDeepLink` the whole
+stack is built:
 
 ```dart
 WeaveRouter(
   routes: routes,
   stackAncestorsOnDeepLink: true,
 );
-// /cadernos/7/gabarito  ->  [/cadernos, /cadernos/7, /cadernos/7/gabarito]
+// /notebooks/7/answers  ->  [/notebooks, /notebooks/7, /notebooks/7/answers]
 ```
 
-Segmento sem rota registrada é pulado, não vira 404. A query fica só na folha.
+A segment with no registered route is skipped, not turned into a 404. The
+query stays on the leaf only.
 
-### Transições
+### Transitions
 
 ```dart
 WeaveRoute(
@@ -355,7 +350,7 @@ WeaveRoute(
   transition: WeaveTransition.fade,
 );
 
-// Transição customizada
+// Custom transition
 WeaveRoute(
   path: '/animated',
   builder: (_, _) => const AnimatedPage(),
@@ -367,10 +362,9 @@ WeaveRoute(
 );
 ```
 
-### Módulos com Lifecycle
+### Modules with a lifecycle
 
-`name`, `binds` e `routes` são campos do construtor, não getters
-sobrescrevíveis:
+`name`, `binds` and `routes` are constructor fields, not overridable getters:
 
 ```dart
 class AuthModule extends WeaveModule {
@@ -386,7 +380,7 @@ class AuthModule extends WeaveModule {
 
   @override
   Future<void> onInit() async {
-    // Inicialização assíncrona (ex: carregar tokens)
+    // Async initialisation (loading tokens, for instance)
   }
 
   @override
@@ -400,18 +394,18 @@ final registry = WeaveModuleRegistry();
 registry.register(AuthModule());
 registry.register(HomeModule());
 await registry.installAll();
-// ... usar módulos ...
+// ... use the modules ...
 await registry.disposeAll();
 ```
 
-`installAll` resolve a ordem topologicamente pelos `imports`, então a ordem de
-registro não importa. Um módulo importado por dois outros é instalado uma vez
-só — e `onInit` roda exatamente uma vez por módulo do grafo, inclusive para
-imports que nunca foram registrados diretamente.
+`installAll` resolves the order topologically from the `imports`, so
+registration order does not matter. A module imported by two others is
+installed once only — and `onInit` runs exactly once per module in the graph,
+including for imports that were never registered directly.
 
-O container do módulo é um **escopo do global**: o que não estiver registrado
-nele é resolvido subindo. Para que as rotas do módulo resolvam a partir dele,
-passe o container ao router:
+A module's container is a **scope of the global one**: whatever is not
+registered in it is resolved by walking up. For the module's routes to resolve
+from it, pass the container to the router:
 
 ```dart
 final router = WeaveRouter(
@@ -420,24 +414,24 @@ final router = WeaveRouter(
 );
 ```
 
-### Diagnóstico
+### Diagnostics
 
-O Weave é **silencioso por padrão**. Até a 2.0.0 o container fazia um `print`
-a cada resolução, inclusive em release.
+Weave is **silent by default**. Up to 2.0.0 the container `print`ed on every
+resolution, in release builds included.
 
 ```dart
-// Liga o log só em debug
+// Turn logging on in debug only
 WeaveLog.logger = kDebugMode ? WeaveLog.debugPrintLogger : null;
 
-// Ou por container/router
-WeaveContainerAdapter.create(name: 'auth', logger: meuLogger);
-WeaveRouter(routes: routes, logger: meuLogger);
+// Or per container/router
+WeaveContainerAdapter.create(name: 'auth', logger: myLogger);
+WeaveRouter(routes: routes, logger: myLogger);
 ```
 
-### Navegação
+### Navigation
 
 ```dart
-// Passando router explicitamente
+// Passing the router explicitly
 context.pushRoute(appRouter, '/user/42');
 context.replaceRoute(appRouter, '/settings');
 context.pushNamedRoute(appRouter, 'home');
@@ -446,110 +440,115 @@ context.popUntilRoot();
 context.clearStackAndPush(appRouter, '/login');
 ```
 
-### Testando
+### Testing
 
 ```dart
 test('service works', () {
   final container = WeaveContainerAdapter(name: 'test');
-  
+
   container.bindSingleton<AuthService>(() => MockAuthService());
   container.overrideFactory<AuthService>(() => MockAuthService());
-  
+
   final auth = container.get<AuthService>();
   expect(auth, isA<MockAuthService>());
-  
+
   container.reset();
 });
 ```
 
-## Referência da API
+## API reference
 
 ### WeaveContainer
-| Método | Descrição |
-|--------|-----------|
+| Method | Description |
+|--------|-------------|
 | `bind<T>()` | Transient |
 | `bindSingleton<T>()` | Singleton |
 | `bindLazy<T>()` | Lazy singleton |
-| `bindInstance<T>()` | Valor pré-criado |
-| `bindFactory<T, A>()` | Factory com 1 param |
-| `bindFactory2<T, A, B>()` | Factory com 2 params |
-| `bindFactory3<T, A, B, C>()` | Factory com 3 params |
+| `bindInstance<T>()` | A pre-built value |
+| `bindFactory<T, A>()` | Factory with 1 param |
+| `bindFactory2<T, A, B>()` | Factory with 2 params |
+| `bindFactory3<T, A, B, C>()` | Factory with 3 params |
 | `get<T>()` / `get1<T, A>()` / `get2<T, A, B>()` / `get3<T, A, B, C>()` | Resolve |
 | `tryGet<T>()` | Nullable resolve |
-| `unbind<T>()` | Remove registro |
-| `overrideFactory<T>()` | Override (testes) |
-| `createScope()` / `disposeScope()` | Escopos |
+| `unbind<T>()` | Removes a registration |
+| `overrideFactory<T>()` | Override (for tests) |
+| `createScope()` / `disposeScope()` | Scopes |
 | `reset()` / `resetSingletons()` / `resetOverrides()` | Reset |
 
 ### WeaveRoute
-| Propriedade | Descrição |
-|-------------|-----------|
-| `path` | Path com sintaxe `:param` |
-| `name` | Nome para navegação nomeada |
-| `builder` | Builder com `WeaveParams` |
-| `guards` | Guards de autorização assíncronos |
-| `middlewares` | Middleware transversal |
-| `transition` | Transições de página |
-| `redirect` | Redirect condicional |
+| Property | Description |
+|----------|-------------|
+| `path` | Path with `:param` syntax |
+| `name` | Name for named navigation |
+| `builder` | Builder receiving `WeaveParams` |
+| `guards` | Async authorisation guards |
+| `middlewares` | Cross-cutting middleware |
+| `transition` | Page transitions |
+| `redirect` | Conditional redirect |
 | `injectFactory` | Lazy injection |
-| `children` | Rotas aninhadas |
-| `shellBuilder` | Layout shell |
+| `children` | Nested routes |
 
 ### WeaveGuard
-| Factory | Descrição |
-|---------|-----------|
-| `WeaveGuard.custom()` | Guard customizado |
-| `WeaveGuard.allow()` | Sempre permite |
-| `WeaveGuard.deny()` | Sempre bloqueia |
-| `WeaveGuard.auth()` | Guard de autenticação |
+| Factory | Description |
+|---------|-------------|
+| `WeaveGuard.custom()` | Custom guard |
+| `WeaveGuard.allow()` | Always allows |
+| `WeaveGuard.deny()` | Always blocks |
+| `WeaveGuard.auth()` | Authentication guard |
 
 ### WeaveMiddleware
-| Factory | Descrição |
-|---------|-----------|
+| Factory | Description |
+|---------|-------------|
 | `WeaveMiddleware.log()` | Logging |
-| `WeaveMiddleware.onNavigateAction()` | Ação customizada ao navegar |
-| `WeaveMiddleware.onRouteMatchedAction()` | Ação ao encontrar rota |
+| `WeaveMiddleware.onNavigateAction()` | Custom action on navigation |
+| `WeaveMiddleware.onRouteMatchedAction()` | Action when a route matches |
 
 ### WeaveRouter
-| Método/Propriedade | Descrição |
-|---------------------|-----------|
-| `routes` | Rotas registradas |
-| `middlewares` | Middlewares globais |
-| `match(path)` | Busca rota correspondente |
-| `canActivateRoute()` | Valida guards/middleware |
-| `routeFactory` | Para MaterialApp.onGenerateRoute |
+| Method/Property | Description |
+|-----------------|-------------|
+| `routes` | Registered routes |
+| `middlewares` | Global middlewares |
+| `match(path)` | Finds the matching route |
+| `canActivateRoute()` | Validates guards/middleware |
+| `routeFactory` | For MaterialApp.onGenerateRoute |
 
 ### WeaveParams
-| Método | Descrição |
-|--------|-----------|
-| `getString()` / `getInt()` / `getDouble()` / `getBool()` / `getList()` / `getDateTime()` | Acesso tipado |
-| `contains()` / `merge()` / `isEmpty` / `isNotEmpty` | Utilidades |
-| `==` / `hashCode` | Igualdade |
+| Method | Description |
+|--------|-------------|
+| `getString()` / `getInt()` / `getDouble()` / `getBool()` / `getList()` / `getDateTime()` | Typed access |
+| `contains()` / `merge()` / `isEmpty` / `isNotEmpty` | Utilities |
+| `==` / `hashCode` | Equality |
 
-## Arquitetura
+## Architecture
 
-O Weave é organizado em camadas:
+Weave is organised in layers:
 
 ```
 lib/
-├── weave.dart              # Barrel export
+├── weave_di.dart           # Barrel export
 └── src/
-    ├── binding.dart        # WeaveBinding — registro de DI
-    ├── container.dart      # WeaveContainer — interface abstrata
-    ├── container_adapter.dart # WeaveContainerAdapter — implementação
-    ├── guard.dart          # WeaveGuard — autorização de rotas
-    ├── middleware.dart      # WeaveMiddleware — interceptadores
-    ├── module.dart         # WeaveModule — organização por features
-    ├── navigation.dart     # Extensões de BuildContext
-    ├── route.dart          # WeaveRoute, WeaveParams, WeaveTransition
-    ├── router.dart         # WeaveRouter — gerenciador central
-    └── shell_route.dart    # WeaveShellRoute — layouts persistentes
+    ├── container.dart         # WeaveContainer — the abstract interface
+    ├── container_adapter.dart # WeaveContainerAdapter — the implementation
+    ├── errors.dart            # the errors the container throws
+    ├── export.dart            # what the barrel re-exports
+    ├── gate.dart              # the gate a guard's decision passes through
+    ├── guard.dart             # WeaveGuard — route authorisation
+    ├── logger.dart            # WeaveLog — silent by default
+    ├── middleware.dart        # WeaveMiddleware — interceptors
+    ├── module.dart            # WeaveModule — organisation by feature
+    ├── navigation.dart        # BuildContext extensions
+    ├── route.dart             # WeaveRoute, WeaveParams, WeaveTransition
+    └── router.dart            # WeaveRouter — the central manager
 ```
 
-## Contribuindo
+The reasoning behind those choices is in
+[ARCHITECTURE.md](ARCHITECTURE.md), and worked examples in
+[EXAMPLES.md](EXAMPLES.md).
 
-Leia [CONTRIBUTING.md](CONTRIBUTING.md) para guia completo.
+## Contributing
 
-## Licença
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 
-MIT License — veja [LICENSE](LICENSE) para detalhes.
+## Licence
+
+MIT. See [LICENSE](LICENSE).

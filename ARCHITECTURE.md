@@ -1,44 +1,61 @@
-# Arquitetura do Weave
+**English** · [Português](ARCHITECTURE.pt-BR.md)
 
-Esse documento descreve as decisões de design por trás do Weave. Se você está pensando em contribuir ou quer entender por que as coisas são do jeito que são, leia aqui.
+# Weave's architecture
 
-## Visão Geral
+This document describes the design decisions behind Weave. If you are thinking
+about contributing, or want to understand why things are the way they are, read
+this.
 
-O Weave foi desenhado pra resolver dois problemas que eu via constantemente em apps Flutter:
+## Overview
 
-1. **DI complexo demais** — muitos containers, muita configuração, difícil de testar
-2. **Navegação espalhada** — rotas definidas em mil lugares, sem consistência
+Weave was designed to solve two problems I kept seeing in Flutter apps:
 
-A solução foi criar um framework que seja **simples o suficiente pra usar no dia a dia**, mas **poderoso o suficiente pra escalar**.
+1. **DI that is too complex** — too many containers, too much configuration,
+   hard to test
+2. **Navigation scattered everywhere** — routes defined in a thousand places,
+   with no consistency
 
-## Princípios de Design
+The answer was a framework **simple enough to use day to day** and **powerful
+enough to scale**.
 
-### 1. Simplicidade sobre Flexibilidade
+## Design principles
 
-Eu poderia ter feito um container super flexível com scopes aninhados, interceptors, lifecycle hooks complexos, etc. Mas a realidade é que 90% dos casos de uso precisam de:
+### 1. Simplicity over flexibility
+
+I could have built a hugely flexible container with nested scopes,
+interceptors, complex lifecycle hooks and so on. But the reality is that 90% of
+use cases need:
+
 - Singleton
 - Transient
 - Lazy
 - Instance
 
-O resto é edge case. Então o container foi desenhado pra ser **ótimo nos casos comuns** e **bom nos casos complexos**.
+The rest are edge cases. So the container was designed to be **excellent at the
+common cases** and **good at the complex ones**.
 
-### 2. Type-Safety em Tudo
+### 2. Type safety everywhere
 
-Toda vez que você usa `WeaveParams`, os dados vêm tipados. Não tem `Map<String, String>` solto no código. Isso evita bugs em runtime que são difíceis de debugar.
+Every time you use `WeaveParams`, the data comes typed. There is no loose
+`Map<String, String>` in the code. That avoids runtime bugs that are hard to
+debug.
 
-### 3. Zero Estado Global
+### 3. Zero global state
 
-Na 1.0.0, eu tinha um `WeaveRouter.current` global. Parecia conveniente, mas causava problemas:
-- Difícil de testar
-- Confuso em multi-navigator
-- Race conditions em navegação assíncrona
+In 1.0.0 there was a global `WeaveRouter.current`. It looked convenient, and it
+caused problems:
 
-Na 2.0.0, todo método de navegação recebe o `WeaveRouter` como parâmetro. Mais verboso, mas muito mais seguro.
+- hard to test
+- confusing with multiple navigators
+- race conditions in async navigation
 
-### 4. Composição sobre Herança
+In 2.0.0 every navigation method takes the `WeaveRouter` as a parameter. More
+verbose, and much safer.
 
-O `WeaveModule` é uma classe concreta que você pode estender, mas também pode compor. Os `binds` são funções, não métodos abstratos. Isso permite padrões como:
+### 4. Composition over inheritance
+
+`WeaveModule` is a concrete class you can extend, but you can also compose it.
+The `binds` are functions, not abstract methods. That allows patterns like:
 
 ```dart
 final module = WeaveModule(
@@ -50,66 +67,75 @@ final module = WeaveModule(
 );
 ```
 
-### 5. Testabilidade como Prioridade
+### 5. Testability as a priority
 
-A interface `WeaveContainer` foi criada especificamente pra permitir troca de implementação:
+The `WeaveContainer` interface exists specifically to allow swapping the
+implementation:
 
 ```dart
-// Em testes
+// In tests
 final container = MockContainer();
-// Ou
+// Or
 final container = WeaveContainerAdapter(name: 'test');
 container.overrideFactory<AuthService>(() => MockAuthService());
 ```
 
-## Decisões de Implementação
+## Implementation decisions
 
-### Por que `Function?` no `_Binding`?
+### Why `Function?` inside the binding?
 
-Eu usei `Function?` internamente pra evitar generics complexos. O Dart não tem reified generics em runtime, então eu preciso usar closures pra capturar os tipos:
+I used `Function?` internally to avoid complex generics. Dart has no reified
+generics at runtime, so I need closures to capture the types:
 
 ```dart
 class _Binding<T> {
   final Function? _factory0;
-  
+
   dynamic resolve0() {
     return (_factory0 as WeaveFactory<T>)();
   }
 }
 ```
 
-Isso permite que o container funcione com qualquer tipo sem precisar de `Map<Type, dynamic>` (que é inseguro).
+That lets the container work with any type without needing a
+`Map<Type, dynamic>`, which is unsafe.
 
-### Por que não usar `get_it` ou `provider`?
+### Why not use `get_it` or `provider`?
 
-Eu não queria depender de pacotes externos pro DI. O `get_it` é ótimo, mas:
-- Não tem scopes com lifecycle
-- Não tem detecção de circulares
-- Não tem factories com parâmetros
+I did not want an external dependency for DI. `get_it` is good, but:
 
-E eu não queria puxar uma dependência pesada pra algo que eu podia fazer com ~200 linhas.
+- it has no scopes with a lifecycle
+- it has no circular-dependency detection
+- it has no factories with parameters
 
-### Por que o router é baseado em `onGenerateRoute`?
+And I did not want to pull in a heavy dependency for something I could write in
+about 200 lines.
 
-O Flutter não tem um navigator 2.0 estável ainda. O `onGenerateRoute` é o padrão e funciona bem. Quando o Navigator 2.0 estiver pronto, eu posso adicionar suporte sem quebrar a API.
+### Why is the router based on `onGenerateRoute`?
 
-### Por que middlewares são assíncronos?
+Flutter still has no stable Navigator 2.0. `onGenerateRoute` is the standard
+and works well. When Navigator 2.0 is ready, support can be added without
+breaking the API.
 
-Porque na vida real, middleware precisa de:
-- Analytics (pode ser async)
-- Logging (pode ser async)
-- Checagem de auth (async)
-- Tracking (async)
+### Why are middlewares asynchronous?
 
-Se fosse síncrono, você não poderia fazer nada útil.
+Because in real life, middleware needs:
 
-## Estrutura de Módulos
+- analytics (can be async)
+- logging (can be async)
+- auth checks (async)
+- tracking (async)
 
-Os módulos são uma camada de organização, não de abstração. Eles:
-- Agrupam binds relacionados
-- Agrupam rotas relacionadas
-- Têm lifecycle (`onInit`, `onDispose`)
-- Podem ser compostos via imports
+If it were synchronous, you could not do anything useful.
+
+## Module structure
+
+Modules are a layer of organisation, not of abstraction. They:
+
+- group related binds
+- group related routes
+- have a lifecycle (`onInit`, `onDispose`)
+- can be composed through imports
 
 ```
 App
@@ -126,24 +152,28 @@ App
     └── imports: [AuthModule, HomeModule]
 ```
 
-## Shell Routes
+## Persistent layouts
 
-Shell routes existem pra resolver o problema de layouts persistentes (bottom nav, sidebar). A ideia é:
-- O shell fica renderizado
-- Apenas o conteúdo interno muda
-- A navegação filha é gerenciada pelo shell
+The problem of a layout that stays put while the content changes — a bottom
+nav, a sidebar, a store header — is solved by `layoutBuilder` on a nested
+route. It wraps the route and its entire subtree, and it is widget composition
+rather than a nested Navigator: the stack remains one, and the layout is
+rebuilt on each route.
 
-Isso é feito via `WeaveShellRoute` que:
-1. Mantém o `shellBuilder` como layout pai
-2. Renderiza o filho correspondente via `matchChild()`
-3. Permite customização via `childBuilder`
+An earlier attempt at this shipped as `WeaveShellRoute`, with `isShell`,
+`shellBuilder` and a separate matching path. It was **dead code**: the router
+never consumed any of it. It was deprecated in 2.1.0 and removed in 3.0.0, and
+`layoutBuilder` is what took its place. This paragraph exists because the
+document described the shell as though it worked, for two versions after it
+stopped existing.
 
-## Transições
+## Transitions
 
-O sistema de transições é uma camada fina sobre `PageRouteBuilder`. Não tentei reinventar a roda — apenas provei uma API mais simples:
+The transition system is a thin layer over `PageRouteBuilder`. I did not try to
+reinvent the wheel — I only provided a simpler API:
 
 ```dart
-// Em vez de
+// Instead of
 PageRouteBuilder(
   pageBuilder: (_, __, ___) => Page(),
   transitionsBuilder: (_, animation, __, child) {
@@ -151,35 +181,33 @@ PageRouteBuilder(
   },
 );
 
-// Você escreve
+// You write
 WeaveRoute(
   transition: WeaveTransition.fade,
   builder: (_) => Page(),
 );
 ```
 
-## O que não está no escopo
+## Out of scope
 
-- **State management** — Weave é DI + rotas, não Redux/BLoC/Riverpod
-- **Injeção automática** — eu prefério explícito sobre implícito
-- **Code generation** — sem build_runner, sem annotations mágicas
-- **Hot reload avançado** — isso é responsabilidade do Flutter
+- **State management** — Weave is DI + routing, not Redux/BLoC/Riverpod
+- **Automatic injection** — I prefer explicit over implicit
+- **Code generation** — no build_runner, no magic annotations
+- **Advanced hot reload** — that is Flutter's responsibility
 
-## Futuro
+## Future
 
-Coisas que eu gostaria de adicionar (sem prometer):
+Things I would like to add, without promising:
 
-- Navigator 2.0 (quando estiver estável)
-- Deep linking mais robusto
-- Analytics middleware embutido
-- Test helpers pra routing
-- **Ligar ou remover shell routes** — hoje são código morto: `WeaveShellRoute`,
-  `isShell`, `shellBuilder` e `children` não são consumidos pelo router.
-  Depreciados na 2.1.0; a 3.0.0 decide entre implementar ou remover.
-- Revisão do container na 3.0.0: bindings nomeados, `validate()` do grafo,
-  singleton eager, erros tipados e dispose por binding. Tudo isso muda a
-  interface `WeaveContainer`, e em Dart isso quebra quem usa `implements`.
+- Navigator 2.0, once it is stable
+- More robust deep linking
+- A built-in analytics middleware
+- Test helpers for routing
+- A container revision: named bindings, a `validate()` over the graph, eager
+  singletons, typed errors and per-binding dispose. All of that changes the
+  `WeaveContainer` interface, and in Dart that breaks whoever uses
+  `implements`.
 
 ---
 
-Se você discorda de alguma decisão, me avise! Eu aberto a discussão.
+If you disagree with a decision, say so. I am open to the discussion.
