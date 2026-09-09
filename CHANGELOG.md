@@ -7,6 +7,25 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [3.4.1] - 2026-09-09
+
+Nada no código mudou. A 3.4.0 foi publicada com o README que mandava instalar
+este pacote por SSH, de um repositório **privado**, com deploy key e tag — a
+instrução que a página do pub.dev renderizava para quem chegava, e que era
+impossível de seguir num pacote publicado sob MIT.
+
+O que muda: README, ARCHITECTURE, CONTRIBUTING e EXAMPLES em inglês no caminho
+canônico, com o português ao lado em `*.pt-BR.md`. A instalação passa a ser a
+dependência hospedada.
+
+Cinco exemplos que não compilavam foram corrigidos: o app modular usava getters
+onde a API tem campos de construtor, três exemplos de shell route usavam
+`WeaveShellRoute` — removida na 3.0.0 — e o exemplo de teste envolvia o widget
+no escopo de um segundo injetor. As tabelas de arquitetura listavam dois
+arquivos que não existem e omitiam quatro que existem.
+
+---
+
 ## [3.4.0] - 2026-09-08
 
 **Mudança de licença: de volta para MIT.** A 3.0.0 tinha fechado o pacote, e
