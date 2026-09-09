@@ -1,3 +1,28 @@
+# Negate root .gitignore /packages/ pattern
+!pubspec.yaml
+!LICENSE
+!README.md
+!CHANGELOG.md
+!lib/
+!lib/**/
+
+# Files to EXCLUDE from publishing
+.dart_tool/
+.packages
+pubspec.lock
+build/
+coverage/
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+.test_coverage.dart
+test/
+
 # Documento interno: descreve a deploy key de quando este repositorio era
 # privado. Nao carrega segredo, mas nao diz nada a quem baixa o pacote do
 # pub.dev — e contradiz a licenca MIT que o pacote agora tem.
