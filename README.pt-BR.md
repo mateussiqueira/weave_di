@@ -10,7 +10,10 @@
 
 MIT. Copyright (c) 2026 Mateus Siqueira. As versões 3.0.0 a 3.3.0 saíram como
 proprietárias; da 3.4.0 em diante o pacote volta a ser MIT, e é assim que ele
-fica.
+fica. A **4.0.0** abre rotas, diálogos e bottom sheets pelo pacote
+[`material_ui`](https://pub.dev/packages/material_ui) em vez do
+`package:flutter/material.dart` depreciado (breaking; veja o
+[CHANGELOG](CHANGELOG.md#400---2026-11-15)).
 
 
 ## Por que Weave?
