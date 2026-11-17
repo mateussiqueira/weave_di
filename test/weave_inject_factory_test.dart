@@ -1,6 +1,6 @@
 // `builder` deixa de ser obrigatório quando a rota usa `injectFactory`.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weave_di/weave_di.dart';
 

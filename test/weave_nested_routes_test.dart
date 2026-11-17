@@ -1,7 +1,7 @@
 // Rotas hierárquicas — árvore declarada, achatada na construção do router.
 // Os dois casos de referência: delivery (web, URL) e concursos (módulos).
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weave_di/weave_di.dart';
 
