@@ -10,7 +10,9 @@
 
 MIT. Copyright (c) 2026 Mateus Siqueira. Versions 3.0.0 through 3.3.0 went out
 as proprietary; from 3.4.0 onwards the package is MIT again, and that is how it
-stays.
+stays. **4.0.0** routes, dialogs, and bottom sheets use the [`material_ui`](https://pub.dev/packages/material_ui)
+package instead of deprecated `package:flutter/material.dart` (breaking; see
+[CHANGELOG](CHANGELOG.md#400---2026-11-15)).
 
 ## Why Weave?
 

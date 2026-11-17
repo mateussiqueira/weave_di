@@ -7,7 +7,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
-## [4.0.0] - 2026-11-15 (local, ainda sem tag)
+## [4.0.0] - 2026-11-15
 
 **Material novo.** O Flutter 3.47 deprecou `package:flutter/material.dart`
 em favor do pacote `material_ui`. O weave_di passa a abrir rotas
